@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreightQuick — Lightning-Fast Dispatch Automation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #0A0E14;
+    --orange: #FF6B35;
+    --orange-dim: #E85A28;
+    --orange-muted: rgba(255, 107, 53, 0.12);
+    --white: #F4F6F8;
+    --gray: #9BA5B0;
+    --gray-dark: #1A1F26;
+    --gray-mid: #2A3038;
+    --mono: 'IBM Plex Mono', monospace;
+    --display: 'Archivo', sans-serif;
+    --body: 'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: var(--body);
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 60px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(10,14,20,0.85);
+    backdrop-filter: blur(20px);
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--display); font-size: 17px; font-weight: 900;
+    letter-spacing: -0.5px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--orange), #FF8B5A);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900; color: var(--black);
+  }
+
+  .nav-links {
+    display: flex; gap: 36px; list-style: none;
+    font-size: 14px; color: var(--gray);
+  }
+  .nav-links a { color: inherit; text-decoration: none; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--white); }
+
+  .btn-primary {
+    background: var(--orange); color: var(--white);
+    border: none; padding: 10px 22px; border-radius: 8px;
+    font-family: var(--body); font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.2px;
+    text-decoration: none; display: inline-block;
+  }
+  .btn-primary:hover { background: #FF7D47; transform: translateY(-1px); }
+
+  .btn-outline {
+    background: transparent; color: var(--white);
+    border: 1px solid rgba(255,255,255,0.2); padding: 10px 22px; border-radius: 8px;
+    font-family: var(--body); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.2s; text-decoration: none; display: inline-block;
+  }
+  .btn-outline:hover { border-color: var(--white); }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; gap: 60px;
+    padding: 140px 60px 80px;
+    position: relative; overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 60% 70% at 30% 50%, rgba(255,107,53,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-eyebrow {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--orange); letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    display: block; width: 24px; height: 2px; background: var(--orange);
+  }
+
+  .hero-title {
+    font-family: var(--display); font-size: clamp(52px, 5.5vw, 82px);
+    font-weight: 900; line-height: 0.95; letter-spacing: -3px;
+    margin-bottom: 32px;
+  }
+  .hero-title em { color: var(--orange); font-style: normal; }
+
+  .hero-desc {
+    font-size: 17px; color: var(--gray); line-height: 1.7;
+    max-width: 440px; margin-bottom: 44px; font-weight: 400;
+  }
+
+  .hero-ctas { display: flex; gap: 14px; align-items: center; }
+
+  .hero-stat-row {
+    margin-top: 64px; display: flex; gap: 48px;
+    padding-top: 36px; border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .hero-stat-num {
+    font-family: var(--display); font-size: 32px; font-weight: 900;
+    color: var(--white); letter-spacing: -1px;
+  }
+  .hero-stat-num span { color: var(--orange); }
+  .hero-stat-label { font-size: 13px; color: var(--gray); margin-top: 4px; }
+
+  /* ── DISPATCH UI MOCKUP ── */
+  .hero-visual {
+    position: relative; display: flex; flex-direction: column; gap: 16px;
+  }
+
+  .dispatch-card {
+    background: rgba(26,31,38,0.9);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 20px 24px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+    animation: floatUp 0.8s ease forwards;
+    opacity: 0;
+  }
+  .dispatch-card:nth-child(1) { animation-delay: 0.2s; }
+  .dispatch-card:nth-child(2) { animation-delay: 0.4s; }
+  .dispatch-card:nth-child(3) { animation-delay: 0.6s; transform: translateX(24px); }
+
+  @keyframes floatUp {
+    to { opacity: 1; transform: translateY(0) translateX(0); }
+    from { opacity: 0; transform: translateY(16px); }
+  }
+
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .card-title { font-family: var(--display); font-size: 14px; font-weight: 700; }
+  .card-badge {
+    background: var(--orange); color: var(--white);
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px;
+  }
+  .card-badge.blue {
+    background: rgba(59,130,246,0.2); color: #93C5FD;
+  }
+
+  .driver-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 13px;
+  }
+  .driver-row:last-child { border-bottom: none; }
+  .driver-info { display: flex; align-items: center; gap: 10px; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--gray-mid); display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 9px; color: var(--gray); font-weight: 600;
+  }
+  .driver-name { font-weight: 600; font-size: 13px; }
+  .match-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--orange);
+  }
+  .match-badge::before { content: '⚡'; font-size: 10px; }
+
+  .metric-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px; margin-top: 4px;
+  }
+  .metric-cell { text-align: center; padding: 12px 8px; background: var(--gray-dark); border-radius: 8px; }
+  .metric-val {
+    font-family: var(--display); font-size: 20px; font-weight: 900;
+    color: var(--white);
+  }
+  .metric-val.orange { color: var(--orange); }
+  .metric-key { font-size: 10px; color: var(--gray); margin-top: 3px; font-family: var(--mono); letter-spacing: 0.5px; }
+
+  .route-row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px;
+  }
+  .route-row:last-child { border-bottom: none; }
+  .route-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+  .route-dot.gray { background: var(--gray); }
+  .route-line { flex: 1; height: 1px; background: rgba(255,255,255,0.1); }
+  .route-label { font-family: var(--mono); font-size: 10px; color: var(--gray); }
+  .route-saving { font-family: var(--mono); font-size: 10px; color: var(--orange); }
+
+  /* ── FEATURES SECTION ── */
+  .section { padding: 100px 60px; }
+
+  .section-eyebrow {
+    font-family: var(--mono); font-size: 11px; color: var(--orange);
+    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px; font-weight: 600;
+  }
+  .section-title {
+    font-family: var(--display); font-size: clamp(36px, 4vw, 54px);
+    font-weight: 900; letter-spacing: -2px; line-height: 1;
+    max-width: 580px; margin-bottom: 60px;
+  }
+
+  .features-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; overflow: hidden;
+  }
+  .feature-cell {
+    background: var(--black); padding: 36px 28px;
+    transition: background 0.3s;
+  }
+  .feature-cell:hover { background: var(--gray-dark); }
+
+  .feature-icon {
+    width: 40px; height: 40px; background: var(--orange-muted);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px; font-size: 18px;
+  }
+  .feature-name {
+    font-family: var(--display); font-size: 16px; font-weight: 700;
+    margin-bottom: 10px; letter-spacing: -0.3px;
+  }
+  .feature-desc { font-size: 13px; color: var(--gray); line-height: 1.6; font-weight: 400; }
+
+  /* ── METRICS STRIP ── */
+  .metrics-strip {
+    padding: 60px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 40px;
+  }
+  .strip-num {
+    font-family: var(--display); font-size: 48px; font-weight: 900;
+    letter-spacing: -2px; color: var(--orange);
+  }
+  .strip-label { font-size: 13px; color: var(--gray); margin-top: 6px; max-width: 160px; }
+
+  /* ── HOW IT WORKS ── */
+  .steps-grid {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 40px;
+  }
+  .step { position: relative; }
+  .step-num {
+    font-family: var(--mono); font-size: 11px; color: var(--orange);
+    letter-spacing: 1px; margin-bottom: 16px; font-weight: 600;
+  }
+  .step-title {
+    font-family: var(--display); font-size: 22px; font-weight: 700;
+    margin-bottom: 12px; letter-spacing: -0.5px;
+  }
+  .step-desc { font-size: 14px; color: var(--gray); line-height: 1.7; font-weight: 400; }
+  .step-line {
+    position: absolute; top: 8px; right: -20px; width: 40px; height: 2px;
+    background: linear-gradient(90deg, var(--orange), transparent);
+  }
+  .step:last-child .step-line { display: none; }
+
+  /* ── CTA ── */
+  .cta-section {
+    padding: 100px 60px; text-align: center;
+    background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(255,107,53,0.08) 0%, transparent 70%);
+  }
+  .cta-title {
+    font-family: var(--display); font-size: clamp(42px, 5vw, 70px);
+    font-weight: 900; letter-spacing: -3px; line-height: 0.95; margin-bottom: 28px;
+  }
+  .cta-desc { font-size: 17px; color: var(--gray); margin-bottom: 44px; max-width: 480px; margin-left: auto; margin-right: auto; font-weight: 400; }
+  .cta-buttons { display: flex; gap: 16px; justify-content: center; }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 40px 60px; border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  footer .logo { font-size: 14px; }
+  .footer-copy { font-size: 12px; color: var(--gray); font-family: var(--mono); }
+
+  /* ── TICKER ── */
+  .ticker {
+    background: var(--orange-muted); border-bottom: 1px solid rgba(255,107,53,0.2);
+    padding: 10px 0; overflow: hidden; white-space: nowrap;
+  }
+  .ticker-inner {
+    display: inline-flex; gap: 0; animation: ticker 28s linear infinite;
+  }
+  .ticker-item {
+    font-family: var(--mono); font-size: 11px; color: var(--orange);
+    letter-spacing: 1px; padding: 0 40px; font-weight: 600;
+  }
+  .ticker-sep { color: rgba(255,107,53,0.4); }
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  @media (max-width: 900px) {
+    nav { padding: 16px 24px; }
+    .nav-links { display: none; }
+    .hero { grid-template-columns: 1fr; padding: 120px 24px 60px; min-height: auto; }
+    .section { padding: 60px 24px; }
+    .features-grid { grid-template-columns: 1fr 1fr; }
+    .metrics-strip { grid-template-columns: 1fr 1fr; padding: 40px 24px; }
+    .steps-grid { grid-template-columns: 1fr; }
+    .cta-section { padding: 60px 24px; }
+    footer { padding: 24px; flex-direction: column; gap: 16px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span class="ticker-item">MATCH ACCURACY: 98.2% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">LOADS DISPATCHED: 1,847 TODAY <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">AVG OPTIMIZATION: 7.4% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">DELIVERY ON-TIME: 97.3% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">ACTIVE FLEETS: 12,340 <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">REVENUE GAIN: +28.1% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">MATCH ACCURACY: 98.2% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">LOADS DISPATCHED: 1,847 TODAY <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">AVG OPTIMIZATION: 7.4% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">DELIVERY ON-TIME: 97.3% <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">ACTIVE FLEETS: 12,340 <span class="ticker-sep">·</span></span>
+    <span class="ticker-item">REVENUE GAIN: +28.1% <span class="ticker-sep">·</span></span>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    FreightQuick
+  </div>
+  <ul class="nav-links">
+    <li><a href="#features">Platform</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#metrics">Results</a></li>
+    <li><a href="#">Customers</a></li>
+    <li><a href="#">About</a></li>
+  </ul>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <a href="#" class="btn-outline" style="font-size:13px;padding:8px 18px;">Log In</a>
+    <a href="app.html" class="btn-primary">Launch App →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-eyebrow">Lightning-Fast Dispatch</div>
+    <h1 class="hero-title">
+      Dispatch<br>
+      in <em>Seconds</em>.<br>
+      Not Hours.
+    </h1>
+    <p class="hero-desc">
+      FreightQuick automates driver matching, load assignment, and route optimization—delivering decisions in milliseconds and boosting profitability across your entire operation.
+    </p>
+    <div class="hero-ctas">
+      <a href="app.html" class="btn-primary">Get Started Free</a>
+      <a href="#how" class="btn-outline">See How It Works</a>
+    </div>
+    <div class="hero-stat-row">
+      <div>
+        <div class="hero-stat-num">28<span>%</span></div>
+        <div class="hero-stat-label">Revenue Uplift</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">97<span>%</span></div>
+        <div class="hero-stat-label">On-Time Delivery</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">8<span>x</span></div>
+        <div class="hero-stat-label">Faster Dispatch</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-visual">
+    <!-- Dispatch Card -->
+    <div class="dispatch-card">
+      <div class="card-header">
+        <div class="card-title">Quick Dispatch</div>
+        <div class="card-badge">ASSIGN NOW</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:11px;color:var(--gray);font-family:var(--mono);letter-spacing:0.5px;text-transform:uppercase;">
+        <span>Driver</span><span>Match Score</span>
+      </div>
+      <div class="driver-row">
+        <div class="driver-info">
+          <div class="avatar">IG</div>
+          <div class="driver-name">IGRAU</div>
+        </div>
+        <div class="match-badge">3 LOADS</div>
+      </div>
+      <div class="driver-row">
+        <div class="driver-info">
+          <div class="avatar">LS</div>
+          <div class="driver-name">LSANCHEZ</div>
+        </div>
+        <div class="match-badge">98% MATCH</div>
+      </div>
+      <div class="driver-row">
+        <div class="driver-info">
+          <div class="avatar">JT</div>
+          <div class="driver-name">JTORO</div>
+        </div>
+        <div class="match-badge">SOURCE LOAD</div>
+      </div>
+    </div>
+
+    <!-- Metrics Card -->
+    <div class="dispatch-card">
+      <div class="card-header">
+        <div class="card-title">Live Operations</div>
+        <div class="card-badge blue">LIVE</div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-cell">
+          <div class="metric-val orange">96%</div>
+          <div class="metric-key">UTILIZATION</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-val">168</div>
+          <div class="metric-key">ACTIVE</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-val orange">$92k</div>
+          <div class="metric-key">TODAY</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Route Card -->
+    <div class="dispatch-card" style="margin-left:40px;">
+      <div class="card-header">
+        <div class="card-title">Route Optimizer</div>
+        <div class="card-badge">−7.4% saved</div>
+      </div>
+      <div class="route-row">
+        <div class="route-dot"></div>
+        <div style="font-size:12px;">Chicago, IL</div>
+        <div class="route-line"></div>
+        <div class="route-saving">+$168</div>
+      </div>
+      <div class="route-row">
+        <div class="route-dot gray"></div>
+        <div style="font-size:12px;">Indianapolis, IN</div>
+        <div class="route-line"></div>
+        <div class="route-label">4h 12m</div>
+      </div>
+      <div class="route-row">
+        <div class="route-dot"></div>
+        <div style="font-size:12px;">Detroit, MI</div>
+        <div class="route-line"></div>
+        <div class="route-saving">283 mi</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- METRICS STRIP -->
+<div class="metrics-strip" id="metrics">
+  <div>
+    <div class="strip-num">12.3k+</div>
+    <div class="strip-label">Active drivers dispatched daily</div>
+  </div>
+  <div>
+    <div class="strip-num">$3.2B</div>
+    <div class="strip-label">Freight revenue processed annually</div>
+  </div>
+  <div>
+    <div class="strip-num">28%</div>
+    <div class="strip-label">Average revenue increase for fleets</div>
+  </div>
+  <div>
+    <div class="strip-num">97.3%</div>
+    <div class="strip-label">On-time delivery rate maintained</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-eyebrow">Core Features</div>
+  <div class="section-title">Everything you need to dispatch faster.</div>
+  <div class="features-grid">
+    <div class="feature-cell">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-name">Instant Matching</div>
+      <div class="feature-desc">AI ranks every driver-load pair by profitability, location, and performance in under 100ms.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">📦</div>
+      <div class="feature-name">Load Control</div>
+      <div class="feature-desc">Full visibility from tender to delivery. Real-time status, automated alerts, complete audit trail.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">🗺️</div>
+      <div class="feature-name">Smart Routes</div>
+      <div class="feature-desc">Dynamic routing cuts miles and fuel costs. Multi-stop tours planned for maximum driver utilization.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">📊</div>
+      <div class="feature-name">Live Analytics</div>
+      <div class="feature-desc">Real-time dashboards, trend analysis, and predictive insights to keep your fleet profitable.</div>
+    </div>
+  </features-grid>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" style="background: var(--gray-dark); padding-top:80px;padding-bottom:80px;" id="how">
+  <div class="section-eyebrow">How It Works</div>
+  <div class="section-title">From data to dispatch in under 3 seconds.</div>
+  <div class="steps-grid">
+    <div class="step">
+      <div class="step-num">01 // CONNECT</div>
+      <div class="step-title">Sync Your Fleet</div>
+      <div class="step-desc">FreightQuick connects to your TMS in minutes. Drivers, loads, and history sync automatically—no manual entry.</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step">
+      <div class="step-num">02 // ANALYZE</div>
+      <div class="step-title">AI Ranks Every Match</div>
+      <div class="step-desc">Our engine scores thousands of driver-load pairs instantly, ranking by profit, driver preference, and on-time probability.</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step">
+      <div class="step-num">03 // EXECUTE</div>
+      <div class="step-title">Dispatch in One Click</div>
+      <div class="step-desc">Review recommendations, assign with one click. Routes optimize, drivers get notified, and tracking starts immediately.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-eyebrow">Start Today</div>
+  <h2 class="cta-title">Ready for <em style="color:var(--orange);font-style:normal;">lightning-fast</em><br>dispatch?</h2>
+  <p class="cta-desc">Join hundreds of carriers using FreightQuick to automate decisions and drive serious results.</p>
+  <div class="cta-buttons">
+    <a href="app.html" class="btn-primary" style="font-size:15px;padding:13px 28px;">Launch the App →</a>
+    <a href="#" class="btn-outline" style="font-size:15px;padding:13px 28px;">Schedule a Demo</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo">
+    <div class="logo-icon" style="width:24px;height:24px;font-size:14px;">⚡</div>
+    FreightQuick
+  </div>
+  <div class="footer-copy">© 2026 FreightQuick Inc. · All rights reserved.</div>
+</footer>
+
+</body>
+</html>

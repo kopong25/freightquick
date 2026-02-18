@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreightQuick — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.min.js"></script>
+<style>
+  :root {
+    --black: #080C0A; --bg: #0D1210; --bg2: #141A16; --bg3: #1C2420;
+    --green: #FF6B35; --green-dim: #E85A28; --green-glow: rgba(255,107,53,0.15);
+    --white: #F0F5F2; --gray: #8A9E94; --gray2: #627A6C; --border: rgba(255,255,255,0.07);
+    --red: #FF5C5C; --yellow: #FFCC44; --blue: #4DAAFF;
+    --mono: 'IBM Plex Mono', monospace; --display: 'Archivo', sans-serif; --body: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--white); font-family: var(--body); height: 100vh; overflow: hidden; }
+  #root { height: 100vh; display: flex; flex-direction: column; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 2px; }
+
+  .btn { border: none; cursor: pointer; font-family: var(--body); transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-green { background: var(--green); color: var(--black); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .btn-green:hover { background: #2DEDA1; }
+  .btn-ghost { background: transparent; color: var(--gray); padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: var(--white); }
+  .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 6px; }
+
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+  .tag-green { background: rgba(255,107,53,0.12); color: var(--green); }
+  .tag-yellow { background: rgba(255,204,68,0.12); color: var(--yellow); }
+  .tag-red { background: rgba(255,92,92,0.12); color: var(--red); }
+  .tag-blue { background: rgba(77,170,255,0.12); color: var(--blue); }
+  .tag-gray { background: rgba(255,255,255,0.07); color: var(--gray); }
+
+  input, select {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--white);
+    padding: 8px 12px; border-radius: 8px; font-family: var(--body); font-size: 13px;
+    outline: none; transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: var(--green); }
+  input::placeholder { color: var(--gray2); }
+  select option { background: var(--bg3); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+const API = "http://localhost:8000/api";
+
+// ── MOCK DATA (fallback when backend not running) ──────────────────────────
+const MOCK = {
+  drivers: [
+    {id:1,username:"IGRAU",full_name:"Ivan Grau",status:"available",driver_type:"OTR",current_location:"Indianapolis, IN",loads_completed:142,on_time_rate:0.97},
+    {id:2,username:"LSANCHEZ",full_name:"Luis Sanchez",status:"on_load",driver_type:"OTR",current_location:"Memphis, TN",loads_completed:218,on_time_rate:0.95},
+    {id:3,username:"JTORO",full_name:"James Toro",status:"available",driver_type:"Solo",current_location:"Atlanta, GA",loads_completed:89,on_time_rate:0.93},
+    {id:4,username:"MWILSON",full_name:"Mike Wilson",status:"available",driver_type:"Regional",current_location:"Tucson, AZ",loads_completed:301,on_time_rate:0.98},
+    {id:5,username:"SLEONARDS",full_name:"Sarah Leonards",status:"on_load",driver_type:"OTR",current_location:"Portland, OR",loads_completed:176,on_time_rate:0.94},
+    {id:6,username:"JRINALDI",full_name:"Joe Rinaldi",status:"available",driver_type:"OTR",current_location:"Salt Lake City, UT",loads_completed:203,on_time_rate:0.96},
+    {id:7,username:"JABIAS",full_name:"Juan Abias",status:"available",driver_type:"OTR",current_location:"New Orleans, LA",loads_completed:155,on_time_rate:0.91},
+    {id:8,username:"CSMITH",full_name:"Carol Smith",status:"off_duty",driver_type:"Solo",current_location:"Miami, FL",loads_completed:67,on_time_rate:0.99},
+    {id:9,username:"DVARGAS",full_name:"David Vargas",status:"available",driver_type:"Regional",current_location:"San Diego, CA",loads_completed:412,on_time_rate:0.97},
+    {id:10,username:"MRUSSO",full_name:"Marco Russo",status:"on_load",driver_type:"Regional",current_location:"Providence, RI",loads_completed:198,on_time_rate:0.92},
+  ],
+  loads: [
+    {id:1,load_number:"010192-206",origin:"Chicago, IL",destination:"Detroit, MI",pickup_date:"2026-02-18",delivery_date:"2026-02-19",weight:42000,miles:283,rate:1850,status:"available",load_type:"OTR",commodity:"Auto Parts"},
+    {id:2,load_number:"010202-476",origin:"Dallas, TX",destination:"Nashville, TN",pickup_date:"2026-02-18",delivery_date:"2026-02-20",weight:38000,miles:678,rate:2200,status:"assigned",load_type:"OTR",commodity:"Consumer Goods",driver_username:"LSANCHEZ"},
+    {id:3,load_number:"010202-477",origin:"Atlanta, GA",destination:"Charlotte, NC",pickup_date:"2026-02-19",delivery_date:"2026-02-19",weight:28000,miles:244,rate:1100,status:"available",load_type:"OTR",commodity:"Electronics"},
+    {id:4,load_number:"010202-478",origin:"Phoenix, AZ",destination:"Las Vegas, NV",pickup_date:"2026-02-18",delivery_date:"2026-02-18",weight:18000,miles:297,rate:950,status:"available",load_type:"Solo",commodity:"Food & Bev"},
+    {id:5,load_number:"010202-479",origin:"Denver, CO",destination:"Kansas City, MO",pickup_date:"2026-02-19",delivery_date:"2026-02-20",weight:44000,miles:601,rate:2400,status:"in_transit",load_type:"Regional",commodity:"Industrial"},
+    {id:6,load_number:"010202-480",origin:"Houston, TX",destination:"San Antonio, TX",pickup_date:"2026-02-18",delivery_date:"2026-02-18",weight:21000,miles:197,rate:780,status:"available",load_type:"Regional",commodity:"Chemicals"},
+    {id:7,load_number:"010207-481",origin:"Seattle, WA",destination:"Sacramento, CA",pickup_date:"2026-02-20",delivery_date:"2026-02-22",weight:36000,miles:750,rate:2800,status:"assigned",load_type:"OTR",commodity:"Tech Equipment",driver_username:"SLEONARDS"},
+    {id:8,load_number:"010202-321",origin:"Miami, FL",destination:"Orlando, FL",pickup_date:"2026-02-19",delivery_date:"2026-02-19",weight:28000,miles:235,rate:1050,status:"available",load_type:"OTR",commodity:"Retail Goods"},
+  ],
+  analytics: {
+    summary:{total_drivers:10,available_drivers:5,utilization_rate:50,active_loads:7,active_assignments:2,total_revenue:890,avg_on_time_rate:95.2,total_miles:4284,total_fuel_cost:1842},
+    daily_trend:[
+      {date:"02/04",revenue:24000,loads:8,miles:3200},{date:"02/05",revenue:31000,loads:11,miles:4800},
+      {date:"02/06",revenue:28000,loads:9,miles:3900},{date:"02/07",revenue:38000,loads:13,miles:5800},
+      {date:"02/08",revenue:22000,loads:7,miles:2900},{date:"02/09",revenue:18000,loads:6,miles:2400},
+      {date:"02/10",revenue:38000,loads:12,miles:5200},{date:"02/11",revenue:41000,loads:14,miles:6100},
+      {date:"02/12",revenue:33000,loads:11,miles:4700},{date:"02/13",revenue:37000,loads:13,miles:5500},
+      {date:"02/14",revenue:29000,loads:10,miles:4200},{date:"02/15",revenue:44000,loads:15,miles:6400},
+      {date:"02/16",revenue:39000,loads:13,miles:5800},{date:"02/17",revenue:42000,loads:14,miles:6200},
+    ],
+    driver_utilization:[{driver_type:"OTR",total:5,active:2},{driver_type:"Regional",total:3,active:1},{driver_type:"Solo",total:2,active:0}]
+  }
+};
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts={}) {
+  try {
+    const r = await fetch(API+path, {headers:{"Content-Type":"application/json"},...opts});
+    return await r.json();
+  } catch { return null; }
+}
+
+function StatusTag({status}) {
+  const map = {available:["tag-green","AVAILABLE"],on_load:["tag-yellow","ON LOAD"],off_duty:["tag-gray","OFF DUTY"],
+    in_transit:["tag-blue","IN TRANSIT"],assigned:["tag-yellow","ASSIGNED"],delivered:["tag-green","DELIVERED"]};
+  const [cls,label] = map[status]||["tag-gray",status?.toUpperCase()];
+  return <span className={`tag ${cls}`}>{label}</span>;
+}
+
+// ── KPI CARD ───────────────────────────────────────────────────────────────
+function KpiCard({label,value,sub,color}) {
+  return (
+    <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:"20px 24px"}}>
+      <div style={{fontSize:11,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{label}</div>
+      <div style={{fontFamily:"var(--display)",fontSize:34,fontWeight:800,letterSpacing:-1.5,color:color||"var(--white)"}}>{value}</div>
+      {sub && <div style={{fontSize:12,color:"var(--gray)",marginTop:6}}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── SIDEBAR ─────────────────────────────────────────────────────────────────
+const NAV = [
+  {id:"analytics",icon:"📊",label:"Analytics"},
+  {id:"dispatch",icon:"🚛",label:"Dispatch"},
+  {id:"loads",icon:"📦",label:"Loads"},
+  {id:"drivers",icon:"👤",label:"Drivers"},
+  {id:"routes",icon:"🗺️",label:"Routes"},
+];
+
+function Sidebar({active,setActive}) {
+  return (
+    <div style={{width:220,background:"var(--bg)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column",flexShrink:0}}>
+      <div style={{padding:"20px 20px 16px",borderBottom:"1px solid var(--border)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:30,height:30,background:"linear-gradient(135deg, var(--green), #FF8B5A)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"var(--white)"}}>
+            ⚡
+          </div>
+          <span style={{fontFamily:"var(--display)",fontSize:15,fontWeight:900}}>FreightQuick</span>
+        </div>
+      </div>
+      <div style={{padding:"12px 10px",flex:1}}>
+        {NAV.map(n=>(
+          <button key={n.id} onClick={()=>setActive(n.id)}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,
+              background:active===n.id?"var(--green-glow)":"transparent",
+              border:active===n.id?"1px solid rgba(255,107,53,0.2)":"1px solid transparent",
+              color:active===n.id?"var(--green)":"var(--gray)",
+              fontFamily:"var(--body)",fontSize:14,fontWeight:active===n.id?600:400,cursor:"pointer",transition:"all 0.15s",marginBottom:2}}>
+            <span>{n.icon}</span>{n.label}
+          </button>
+        ))}
+      </div>
+      <div style={{padding:"16px 20px",borderTop:"1px solid var(--border)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:"50%",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"var(--gray)"}}>D</div>
+          <div>
+            <div style={{fontSize:12,fontWeight:600}}>Dispatcher</div>
+            <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)"}}>dispatch.lead</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ANALYTICS VIEW ─────────────────────────────────────────────────────────
+function AnalyticsView({data}) {
+  const s = data.summary;
+  const {LineChart,Line,BarChart,Bar,AreaChart,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} = Recharts;
+  return (
+    <div style={{padding:24,overflowY:"auto",flex:1}}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Live Overview</div>
+        <div style={{fontFamily:"var(--display)",fontSize:26,fontWeight:800,letterSpacing:-1}}>Operations Dashboard</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+        <KpiCard label="Driver Utilization" value={`${s.utilization_rate}%`} sub={`${s.available_drivers} available of ${s.total_drivers}`} color="var(--green)"/>
+        <KpiCard label="Active Loads" value={s.active_loads} sub={`${s.active_assignments} assigned`}/>
+        <KpiCard label="Avg On-Time Rate" value={`${s.avg_on_time_rate}%`} sub="Last 90 days"/>
+        <KpiCard label="Total Miles Routed" value={s.total_miles.toLocaleString()} sub={`$${s.total_fuel_cost.toLocaleString()} fuel est.`}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}>
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:14,fontWeight:700,marginBottom:16}}>Daily Revenue (14 Days)</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={data.daily_trend} margin={{top:0,right:0,left:-20,bottom:0}}>
+              <defs>
+                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#FF6B35" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#FF6B35" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
+              <XAxis dataKey="date" tick={{fill:"#8A9E94",fontSize:10,fontFamily:"var(--mono)"}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fill:"#8A9E94",fontSize:10,fontFamily:"var(--mono)"}} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+              <Tooltip contentStyle={{background:"#1C2420",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,fontFamily:"var(--mono)",fontSize:11}} formatter={v=>[`$${v.toLocaleString()}`,"Revenue"]}/>
+              <Recharts.Area type="monotone" dataKey="revenue" stroke="#FF6B35" strokeWidth={2} fill="url(#revGrad)"/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:14,fontWeight:700,marginBottom:16}}>Driver Utilization by Type</div>
+          {data.driver_utilization.map(u=>(
+            <div key={u.driver_type} style={{marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:12,fontFamily:"var(--mono)"}}>{u.driver_type}</span>
+                <span style={{fontSize:12,fontFamily:"var(--mono)",color:"var(--green)"}}>{u.total>0?Math.round(u.active/u.total*100):0}%</span>
+              </div>
+              <div style={{height:6,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${u.total>0?u.active/u.total*100:0}%`,background:"var(--green)",borderRadius:3,transition:"width 0.8s ease"}}></div>
+              </div>
+              <div style={{fontSize:10,color:"var(--gray)",marginTop:4,fontFamily:"var(--mono)"}}>{u.active}/{u.total} active</div>
+            </div>
+          ))}
+          <div style={{marginTop:16,padding:"12px",background:"var(--bg3)",borderRadius:8}}>
+            <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:4}}>LOADS THIS WEEK</div>
+            <div style={{fontFamily:"var(--display)",fontSize:28,fontWeight:800,color:"var(--green)"}}>
+              {data.daily_trend.slice(-7).reduce((a,d)=>a+d.loads,0)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ── DISPATCH VIEW ──────────────────────────────────────────────────────────
+function DispatchView({drivers,loads,onAssign}) {
+  const [selectedLoad,setSelectedLoad] = useState(null);
+  const [selectedDrivers,setSelectedDrivers] = useState([]);
+  const [matches,setMatches] = useState([]);
+  const [assigning,setAssigning] = useState(false);
+  const [toast,setToast] = useState(null);
+
+  const availableLoads = loads.filter(l=>l.status==="available");
+  const availableDrivers = drivers.filter(d=>d.status==="available");
+
+  async function findMatches(loadId) {
+    setSelectedLoad(loadId);
+    setSelectedDrivers([]);
+    const res = await apiFetch("/match",{method:"POST",body:JSON.stringify({load_id:loadId})});
+    if(res?.matches) { setMatches(res.matches); }
+    else {
+      // mock matches
+      const drv = availableDrivers.map((d,i)=>({
+        ...d, match_score: +(d.on_time_rate*(0.88+Math.random()*0.12)).toFixed(2),
+        match_type:["SOURCE LOAD","4 LOAD TOUR","1HR TO SOURCE","SOURCE TOUR"][i%4],
+        eta_to_pickup:`${1+i}h ${Math.floor(Math.random()*59)}m`
+      })).sort((a,b)=>b.match_score-a.match_score);
+      setMatches(drv);
+    }
+  }
+
+  function toggleDriver(id) {
+    setSelectedDrivers(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  }
+
+  async function doAssign() {
+    if(!selectedLoad||!selectedDrivers.length) return;
+    setAssigning(true);
+    for(const did of selectedDrivers) {
+      await apiFetch("/assignments",{method:"POST",body:JSON.stringify({driver_id:did,load_id:selectedLoad})});
+    }
+    await onAssign();
+    setAssigning(false);
+    setToast(`✅ ${selectedDrivers.length} driver(s) assigned successfully`);
+    setSelectedLoad(null); setSelectedDrivers([]); setMatches([]);
+    setTimeout(()=>setToast(null),3000);
+  }
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {toast && <div style={{background:"var(--green)",color:"var(--black)",padding:"10px 20px",fontFamily:"var(--mono)",fontSize:12,fontWeight:600,textAlign:"center"}}>{toast}</div>}
+      <div style={{padding:24,borderBottom:"1px solid var(--border)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Dispatch Management</div>
+            <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Driver Assignment</div>
+          </div>
+          <button className="btn btn-green" onClick={doAssign} disabled={!selectedLoad||!selectedDrivers.length||assigning}
+            style={{opacity:selectedLoad&&selectedDrivers.length?1:0.4}}>
+            {assigning?"Assigning...":"✓ Assign to Driver"}
+          </button>
+        </div>
+      </div>
+      <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",overflow:"hidden"}}>
+        {/* LEFT: Loads */}
+        <div style={{borderRight:"1px solid var(--border)",overflowY:"auto",padding:16}}>
+          <div style={{fontSize:11,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Select Load</div>
+          {availableLoads.map(l=>(
+            <div key={l.id} onClick={()=>findMatches(l.id)}
+              style={{padding:"14px 16px",marginBottom:8,borderRadius:10,cursor:"pointer",
+                background:selectedLoad===l.id?"var(--green-glow)":"var(--bg2)",
+                border:`1px solid ${selectedLoad===l.id?"rgba(255,107,53,0.4)":"var(--border)"}`,
+                transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)"}}>{l.load_number}</span>
+                <StatusTag status={l.status}/>
+              </div>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{l.origin} → {l.destination}</div>
+              <div style={{display:"flex",gap:16,fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)"}}>
+                <span>{l.miles} mi</span>
+                <span>${l.rate?.toLocaleString()}</span>
+                <span>{l.load_type}</span>
+                <span>{l.commodity}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* RIGHT: Driver Matches */}
+        <div style={{overflowY:"auto",padding:16}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{fontSize:11,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase"}}>Optimal Matches</div>
+            {selectedDrivers.length>0&&<span className="tag tag-green">{selectedDrivers.length} selected</span>}
+          </div>
+          {!selectedLoad && <div style={{textAlign:"center",padding:"60px 20px",color:"var(--gray)",fontSize:13}}>Select a load to see driver matches</div>}
+          {matches.map(d=>(
+            <div key={d.id} onClick={()=>toggleDriver(d.id)}
+              style={{padding:"14px 16px",marginBottom:8,borderRadius:10,cursor:"pointer",
+                background:selectedDrivers.includes(d.id)?"var(--green-glow)":"var(--bg2)",
+                border:`1px solid ${selectedDrivers.includes(d.id)?"rgba(255,107,53,0.4)":"var(--border)"}`,
+                transition:"all 0.15s",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${selectedDrivers.includes(d.id)?"var(--green)":"var(--gray2)"}`,
+                background:selectedDrivers.includes(d.id)?"var(--green)":"transparent",
+                display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.1s"}}>
+                {selectedDrivers.includes(d.id)&&<span style={{color:"var(--black)",fontSize:10,fontWeight:800}}>✓</span>}
+              </div>
+              <div style={{width:34,height:34,borderRadius:"50%",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:"var(--mono)",fontSize:10,color:"var(--gray)",flexShrink:0}}>
+                {d.username?.slice(0,2)}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>{d.username}</div>
+                <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)"}}>{d.current_location}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end",marginBottom:4}}>
+                  <span style={{color:"var(--green)",fontSize:12}}>★</span>
+                  <span style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)"}}>{d.match_type}</span>
+                </div>
+                <div style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--gray)"}}>{d.eta_to_pickup} away</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--green)"}}>{Math.round((d.match_score||0)*100)}% match</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LOADS VIEW ─────────────────────────────────────────────────────────────
+function LoadsView({loads,onRefresh}) {
+  const [filter,setFilter]=useState("all");
+  const [search,setSearch]=useState("");
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({load_number:"",origin:"",destination:"",pickup_date:"",delivery_date:"",weight:"",miles:"",rate:"",load_type:"OTR",commodity:""});
+
+  const filtered = loads.filter(l=>{
+    if(filter!=="all"&&l.status!==filter)return false;
+    if(search&&!l.load_number?.includes(search)&&!l.origin?.toLowerCase().includes(search.toLowerCase())&&!l.destination?.toLowerCase().includes(search.toLowerCase()))return false;
+    return true;
+  });
+
+  async function addLoad(e){
+    e.preventDefault();
+    await apiFetch("/loads",{method:"POST",body:JSON.stringify({...form,weight:+form.weight,miles:+form.miles,rate:+form.rate})});
+    await onRefresh(); setShowAdd(false);
+    setForm({load_number:"",origin:"",destination:"",pickup_date:"",delivery_date:"",weight:"",miles:"",rate:"",load_type:"OTR",commodity:""});
+  }
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Load Management</div>
+          <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>All Loads</div>
+        </div>
+        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Load</button>
+      </div>
+
+      {showAdd&&(
+        <form onSubmit={addLoad} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:16}}>New Load</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+            {[["load_number","Load #"],["origin","Origin"],["destination","Destination"],["pickup_date","Pickup Date"],["delivery_date","Delivery Date"],["weight","Weight (lbs)"],["miles","Miles"],["rate","Rate ($)"],["commodity","Commodity"]].map(([k,lbl])=>(
+              <div key={k}>
+                <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>{lbl}</div>
+                <input type={k.includes("date")?"date":k==="weight"||k==="miles"||k==="rate"?"number":"text"} value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{width:"100%"}} required={["load_number","origin","destination"].includes(k)}/>
+              </div>
+            ))}
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>Type</div>
+              <select value={form.load_type} onChange={e=>setForm(p=>({...p,load_type:e.target.value}))} style={{width:"100%"}}>
+                <option>OTR</option><option>Regional</option><option>Solo</option>
+              </select>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:14}}>
+            <button type="submit" className="btn btn-green">Save Load</button>
+            <button type="button" className="btn btn-ghost" onClick={()=>setShowAdd(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      <div style={{display:"flex",gap:10,marginBottom:16}}>
+        <input placeholder="Search loads..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:220}}/>
+        {["all","available","assigned","in_transit","delivered"].map(s=>(
+          <button key={s} className="btn btn-ghost btn-sm" onClick={()=>setFilter(s)}
+            style={{background:filter===s?"var(--green-glow)":"transparent",color:filter===s?"var(--green)":"var(--gray)",borderColor:filter===s?"rgba(255,107,53,0.3)":"var(--border)"}}>
+            {s.replace("_"," ").toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{borderBottom:"1px solid var(--border)"}}>
+              {["Load #","Route","Pickup","Miles","Rate","Type","Commodity","Status","Driver"].map(h=>(
+                <th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(l=>(
+              <tr key={l.id} style={{borderBottom:"1px solid var(--border)",transition:"background 0.1s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="var(--bg3)"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <td style={{padding:"12px 16px",fontFamily:"var(--mono)",fontSize:12,color:"var(--green)"}}>{l.load_number}</td>
+                <td style={{padding:"12px 16px",fontSize:13}}>{l.origin} → {l.destination}</td>
+                <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)",color:"var(--gray)"}}>{l.pickup_date}</td>
+                <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)"}}>{l.miles}</td>
+                <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)",color:"var(--green)"}}>${l.rate?.toLocaleString()}</td>
+                <td style={{padding:"12px 16px"}}><span className="tag tag-gray">{l.load_type}</span></td>
+                <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)"}}>{l.commodity}</td>
+                <td style={{padding:"12px 16px"}}><StatusTag status={l.status}/></td>
+                <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)",color:l.driver_username?"var(--white)":"var(--gray2)"}}>{l.driver_username||"—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No loads match your filters</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVERS VIEW ───────────────────────────────────────────────────────────
+function DriversView({drivers,onRefresh}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [search,setSearch]=useState("");
+  const [form,setForm]=useState({username:"",full_name:"",driver_type:"OTR",home_base:"",current_location:""});
+
+  async function addDriver(e){
+    e.preventDefault();
+    await apiFetch("/drivers",{method:"POST",body:JSON.stringify(form)});
+    await onRefresh(); setShowAdd(false);
+    setForm({username:"",full_name:"",driver_type:"OTR",home_base:"",current_location:""});
+  }
+
+  const filtered = drivers.filter(d=>!search||d.username?.toLowerCase().includes(search.toLowerCase())||d.full_name?.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Driver Management</div>
+          <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>All Drivers</div>
+        </div>
+        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Driver</button>
+      </div>
+
+      {showAdd&&(
+        <form onSubmit={addDriver} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:16}}>New Driver</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+            {[["username","Username"],["full_name","Full Name"],["home_base","Home Base"],["current_location","Current Location"]].map(([k,lbl])=>(
+              <div key={k}>
+                <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>{lbl}</div>
+                <input value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{width:"100%"}} required={["username","full_name"].includes(k)}/>
+              </div>
+            ))}
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>Driver Type</div>
+              <select value={form.driver_type} onChange={e=>setForm(p=>({...p,driver_type:e.target.value}))} style={{width:"100%"}}>
+                <option>OTR</option><option>Regional</option><option>Solo</option>
+              </select>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:14}}>
+            <button type="submit" className="btn btn-green">Save Driver</button>
+            <button type="button" className="btn btn-ghost" onClick={()=>setShowAdd(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      <input placeholder="Search drivers..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:220,marginBottom:16}}/>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+        {filtered.map(d=>(
+          <div key={d.id} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:18,transition:"border-color 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"}
+            onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+              <div style={{width:40,height:40,borderRadius:"50%",background:d.status==="available"?"rgba(255,107,53,0.15)":d.status==="on_load"?"rgba(255,204,68,0.15)":"var(--bg3)",
+                display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--mono)",fontSize:12,color:d.status==="available"?"var(--green)":d.status==="on_load"?"var(--yellow)":"var(--gray)"}}>
+                {d.username?.slice(0,2)}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:14}}>{d.username}</div>
+                <div style={{fontSize:12,color:"var(--gray)"}}>{d.full_name}</div>
+              </div>
+              <StatusTag status={d.status}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{background:"var(--bg3)",borderRadius:8,padding:"8px 10px"}}>
+                <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:3}}>TYPE</div>
+                <div style={{fontSize:13,fontWeight:600}}>{d.driver_type}</div>
+              </div>
+              <div style={{background:"var(--bg3)",borderRadius:8,padding:"8px 10px"}}>
+                <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:3}}>ON-TIME</div>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--green)"}}>{Math.round((d.on_time_rate||0)*100)}%</div>
+              </div>
+              <div style={{background:"var(--bg3)",borderRadius:8,padding:"8px 10px",gridColumn:"span 2"}}>
+                <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:3}}>LOCATION</div>
+                <div style={{fontSize:12,truncate:true}}>{d.current_location||"Unknown"}</div>
+              </div>
+            </div>
+            <div style={{marginTop:10,fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",textAlign:"right"}}>{d.loads_completed} loads completed</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── ROUTES VIEW ────────────────────────────────────────────────────────────
+function RoutesView({drivers,loads}) {
+  const [routes,setRoutes] = useState([
+    {id:1,load_number:"010202-476",username:"LSANCHEZ",origin:"Dallas, TX",destination:"Nashville, TN",total_miles:678,estimated_hours:12.3,fuel_cost:291,toll_cost:54,match_type:"SOURCE LOAD"},
+    {id:2,load_number:"010207-481",username:"SLEONARDS",origin:"Seattle, WA",destination:"Sacramento, CA",total_miles:750,estimated_hours:13.6,fuel_cost:322,toll_cost:60,match_type:"4 LOAD TOUR"},
+  ]);
+  const [optimizing,setOptimizing]=useState(null);
+  const [savings,setSavings]=useState({});
+
+  async function optimize(id,assignmentId) {
+    setOptimizing(id);
+    const res = await apiFetch("/routes/optimize",{method:"POST",body:JSON.stringify({assignment_id:assignmentId||id})});
+    if(res?.optimized) {
+      setSavings(p=>({...p,[id]:{miles:res.savings_miles}}));
+      setRoutes(prev=>prev.map(r=>r.id===id?{...r,total_miles:res.new_total,fuel_cost:+(res.new_total*0.43).toFixed(2)}:r));
+    } else {
+      // mock optimization
+      const saved = +(Math.random()*40+10).toFixed(1);
+      setSavings(p=>({...p,[id]:{miles:saved}}));
+      setRoutes(prev=>prev.map(r=>r.id===id?{...r,total_miles:+(r.total_miles-saved).toFixed(1),fuel_cost:+((r.total_miles-saved)*0.43).toFixed(2)}:r));
+    }
+    setTimeout(()=>setOptimizing(null),600);
+  }
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24}}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Route Intelligence</div>
+        <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Route Optimization</div>
+      </div>
+
+      {/* Summary Bar */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
+        <KpiCard label="Total Miles Tracked" value={routes.reduce((a,r)=>a+r.total_miles,0).toFixed(0)} sub="Across active routes"/>
+        <KpiCard label="Est. Fuel Cost" value={`$${routes.reduce((a,r)=>a+r.fuel_cost,0).toFixed(0)}`} sub="Based on $0.43/mile"/>
+        <KpiCard label="Miles Optimized" value={Object.values(savings).reduce((a,s)=>a+s.miles,0).toFixed(1)} sub="Saved this session" color="var(--green)"/>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {routes.map(r=>(
+          <div key={r.id} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
+              <div>
+                <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",marginBottom:4}}>{r.load_number} · {r.match_type}</div>
+                <div style={{fontFamily:"var(--display)",fontSize:18,fontWeight:700,letterSpacing:-0.5}}>{r.origin} → {r.destination}</div>
+                <div style={{fontSize:12,color:"var(--gray)",marginTop:4}}>Driver: {r.username}</div>
+              </div>
+              <button className="btn btn-green btn-sm" onClick={()=>optimize(r.id,r.assignment_id)}
+                disabled={optimizing===r.id}>
+                {optimizing===r.id?"⟳ Optimizing...":"⚡ Optimize Route"}
+              </button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+              {[["Total Miles",r.total_miles+" mi"],["Est. Hours",r.estimated_hours+"h"],["Fuel Cost","$"+r.fuel_cost],["Toll Cost","$"+r.toll_cost]].map(([k,v])=>(
+                <div key={k} style={{background:"var(--bg3)",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:4,letterSpacing:0.5}}>{k}</div>
+                  <div style={{fontSize:16,fontWeight:700,fontFamily:"var(--display)"}}>{v}</div>
+                </div>
+              ))}
+            </div>
+            {savings[r.id]&&(
+              <div style={{marginTop:12,padding:"8px 12px",background:"rgba(255,107,53,0.1)",border:"1px solid rgba(255,107,53,0.2)",borderRadius:8,
+                fontFamily:"var(--mono)",fontSize:11,color:"var(--green)"}}>
+                ✓ Route optimized · {savings[r.id].miles} miles saved · ~${(savings[r.id].miles*0.43).toFixed(0)} fuel reduction
+              </div>
+            )}
+
+            {/* Visual Route */}
+            <div style={{marginTop:16,display:"flex",alignItems:"center",gap:0}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:"var(--green)",flexShrink:0}}></div>
+              <div style={{flex:1,height:2,background:"linear-gradient(90deg,var(--green),var(--green-dim))",position:"relative"}}>
+                <div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",fontSize:9,fontFamily:"var(--mono)",color:"var(--gray)",whiteSpace:"nowrap"}}>{r.estimated_hours}h · {r.total_miles} mi</div>
+                <div style={{position:"absolute",top:6,left:"30%",width:8,height:8,borderRadius:"50%",background:"var(--bg3)",border:"2px solid var(--gray2)",transform:"translateY(-50%)"}}></div>
+                <div style={{position:"absolute",top:6,left:"65%",width:8,height:8,borderRadius:"50%",background:"var(--bg3)",border:"2px solid var(--gray2)",transform:"translateY(-50%)"}}></div>
+              </div>
+              <div style={{width:10,height:10,borderRadius:"50%",background:"var(--gray2)",flexShrink:0}}></div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+              <span style={{fontSize:10,fontFamily:"var(--mono)",color:"var(--green)"}}>{r.origin}</span>
+              <span style={{fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)"}}>{r.destination}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── TOP BAR ────────────────────────────────────────────────────────────────
+function TopBar({view}) {
+  const labels = {analytics:"Analytics Overview",dispatch:"Dispatch Management",loads:"Load Management",drivers:"Driver Management",routes:"Route Optimization"};
+  return (
+    <div style={{padding:"12px 24px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,background:"var(--bg)"}}>
+      <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1}}>FREIGHTQUICK / {labels[view]?.toUpperCase()}</div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",background:"var(--green-glow)",border:"1px solid rgba(255,107,53,0.2)",borderRadius:6}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"var(--green)",animation:"pulse 2s infinite"}}></div>
+          <span style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--green)"}}>LIVE</span>
+        </div>
+        <div style={{fontSize:12,color:"var(--gray)",fontFamily:"var(--mono)"}}>
+          {new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}
+        </div>
+      </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+    </div>
+  );
+}
+
+// ── APP ────────────────────────────────────────────────────────────────────
+function App() {
+  const [view,setView] = useState("analytics");
+  const [drivers,setDrivers] = useState(MOCK.drivers);
+  const [loads,setLoads] = useState(MOCK.loads);
+  const [analytics,setAnalytics] = useState(MOCK.analytics);
+
+  const refresh = useCallback(async()=>{
+    const [d,l,a] = await Promise.all([apiFetch("/drivers"),apiFetch("/loads"),apiFetch("/analytics")]);
+    if(d) setDrivers(d);
+    if(l) setLoads(l);
+    if(a) setAnalytics(a);
+  },[]);
+
+  useEffect(()=>{ refresh(); },[]);
+
+  return (
+    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+      <Sidebar active={view} setActive={setView}/>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <TopBar view={view}/>
+        {view==="analytics"&&<AnalyticsView data={analytics}/>}
+        {view==="dispatch"&&<DispatchView drivers={drivers} loads={loads} onAssign={refresh}/>}
+        {view==="loads"&&<LoadsView loads={loads} onRefresh={refresh}/>}
+        {view==="drivers"&&<DriversView drivers={drivers} onRefresh={refresh}/>}
+        {view==="routes"&&<RoutesView drivers={drivers} loads={loads}/>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
