@@ -8,7 +8,8 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.min.js"></script>
 <style>
   :root {
     --black: #080C0A; --bg: #0D1210; --bg2: #141A16; --bg3: #1C2420;
@@ -55,7 +56,7 @@
 
 <script type="text/babel">
 const { useState, useEffect, useCallback } = React;
-const API = "http://localhost:8000/api";
+const API = "https://freightquick-app.onrender.com/api";
 
 // ── MOCK DATA (fallback when backend not running) ──────────────────────────
 const MOCK = {
