@@ -55,6 +55,8 @@
 <div id="root"></div>
 
 <script type="text/babel">
+const fqUser = JSON.parse(localStorage.getItem('fq_user') || 'null');
+if(!fqUser) { window.location.href = 'auth.html'; }
 const { useState, useEffect, useCallback } = React;
 const API = "https://freightquick-app.onrender.com/api";
 
