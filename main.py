@@ -183,6 +183,7 @@ async def startup_event():
     init_pay_db()
     init_maintenance_db()
     init_fuel_db()
+    init_insurance_db()
     print("✅ Database initialized")
 
 @app.get("/")
@@ -767,6 +768,70 @@ async def fuel_summary():
         "total_cost": round(total_cost, 2),
         "avg_price_per_gallon": round(avg_ppg, 3)
     }
+# ── FLEET INSURANCE ────────────────────────────────────────────────────────
+
+class InsurancePolicy(BaseModel):
+    truck_number: str
+    policy_number: str
+    provider: str
+    policy_type: str
+    premium: float
+    expiry_date: str
+    coverage_amount: Optional[float] = 0
+    notes: Optional[str] = ""
+
+def init_insurance_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS insurance_policies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            truck_number TEXT NOT NULL,
+            policy_number TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            policy_type TEXT NOT NULL,
+            premium REAL DEFAULT 0,
+            expiry_date TEXT NOT NULL,
+            coverage_amount REAL DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+@app.get("/api/insurance")
+async def get_insurance():
+    conn = get_db()
+    policies = [dict(row) for row in conn.execute(
+        "SELECT * FROM insurance_policies ORDER BY expiry_date ASC"
+    ).fetchall()]
+    conn.close()
+    for p in policies:
+        p["status"] = get_compliance_status(p["expiry_date"])
+    return policies
+
+@app.post("/api/insurance")
+async def create_insurance(policy: InsurancePolicy):
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO insurance_policies (truck_number, policy_number, provider, policy_type, premium, expiry_date, coverage_amount, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (policy.truck_number, policy.policy_number, policy.provider, policy.policy_type,
+          policy.premium, policy.expiry_date, policy.coverage_amount, policy.notes))
+    conn.commit()
+    conn.close()
+    return {"message": "Insurance policy added"}
+
+@app.get("/api/insurance/summary")
+async def insurance_summary():
+    conn = get_db()
+    policies = [dict(row) for row in conn.execute("SELECT * FROM insurance_policies").fetchall()]
+    conn.close()
+    total = len(policies)
+    expired = sum(1 for p in policies if get_compliance_status(p["expiry_date"]) == "expired")
+    expiring = sum(1 for p in policies if get_compliance_status(p["expiry_date"]) == "expiring_soon")
+    total_premium = sum(p["premium"] for p in policies)
+    return {"total": total, "expired": expired, "expiring_soon": expiring, "compliant": total - expired - expiring, "total_premium": round(total_premium, 2)}
 
 if __name__ == "__main__":
     import uvicorn
