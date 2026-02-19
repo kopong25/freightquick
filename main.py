@@ -182,6 +182,7 @@ async def startup_event():
     init_compliance_db()
     init_pay_db()
     init_maintenance_db()
+    init_fuel_db()
     print("✅ Database initialized")
 
 @app.get("/")
@@ -693,6 +694,79 @@ async def maintenance_summary():
     due_soon = sum(1 for r in records if get_maintenance_status(r["next_service_date"]) == "due_soon")
     total_cost = sum(r["cost"] for r in records)
     return {"total": total, "overdue": overdue, "due_soon": due_soon, "ok": total-overdue-due_soon, "total_cost": round(total_cost, 2)}
+
+# ── FUEL CARD MANAGER ──────────────────────────────────────────────────────
+
+class FuelRecord(BaseModel):
+    truck_number: str
+    driver_id: Optional[int] = None
+    date: str
+    gallons: float
+    price_per_gallon: float
+    location: Optional[str] = ""
+    odometer: Optional[float] = 0
+    notes: Optional[str] = ""
+
+def init_fuel_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fuel_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            truck_number TEXT NOT NULL,
+            driver_id INTEGER,
+            date TEXT NOT NULL,
+            gallons REAL DEFAULT 0,
+            price_per_gallon REAL DEFAULT 0,
+            location TEXT,
+            odometer REAL DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (driver_id) REFERENCES drivers(id)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+@app.get("/api/fuel")
+async def get_fuel_records():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute("""
+        SELECT f.*, d.username, d.full_name
+        FROM fuel_records f
+        LEFT JOIN drivers d ON f.driver_id = d.id
+        ORDER BY f.date DESC
+    """).fetchall()]
+    conn.close()
+    for r in records:
+        r["total_cost"] = round(r["gallons"] * r["price_per_gallon"], 2)
+    return records
+
+@app.post("/api/fuel")
+async def create_fuel_record(record: FuelRecord):
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO fuel_records (truck_number, driver_id, date, gallons, price_per_gallon, location, odometer, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (record.truck_number, record.driver_id, record.date, record.gallons,
+          record.price_per_gallon, record.location, record.odometer, record.notes))
+    conn.commit()
+    conn.close()
+    return {"message": "Fuel record created"}
+
+@app.get("/api/fuel/summary")
+async def fuel_summary():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute("SELECT * FROM fuel_records").fetchall()]
+    conn.close()
+    total_gallons = sum(r["gallons"] for r in records)
+    total_cost = sum(r["gallons"] * r["price_per_gallon"] for r in records)
+    avg_ppg = total_cost / total_gallons if total_gallons > 0 else 0
+    return {
+        "total_records": len(records),
+        "total_gallons": round(total_gallons, 2),
+        "total_cost": round(total_cost, 2),
+        "avg_price_per_gallon": round(avg_ppg, 3)
+    }
 
 if __name__ == "__main__":
     import uvicorn
