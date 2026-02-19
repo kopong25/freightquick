@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreightQuick — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0D1210; --bg2: #141A16; --bg3: #1C2420;
+    --green: #FF6B35; --white: #F0F5F2; --gray: #8A9E94;
+    --gray2: #627A6C; --border: rgba(255,255,255,0.07);
+    --red: #FF5C5C; --mono: 'JetBrains Mono', monospace;
+    --display: 'Archivo', sans-serif; --body: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--white); font-family: var(--body); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { width: 100%; max-width: 420px; padding: 24px; }
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; justify-content: center; }
+  .logo-icon { width: 36px; height: 36px; background: var(--green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-family: var(--display); font-size: 20px; font-weight: 800; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 32px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--bg3); border-radius: 8px; padding: 4px; }
+  .tab { flex: 1; padding: 8px; text-align: center; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; border: none; background: transparent; color: var(--gray); transition: all 0.15s; }
+  .tab.active { background: var(--green); color: #000; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 11px; font-family: var(--mono); color: var(--gray); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .field input { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--white); padding: 10px 14px; border-radius: 8px; font-family: var(--body); font-size: 14px; outline: none; transition: border-color 0.15s; }
+  .field input:focus { border-color: var(--green); }
+  .field input::placeholder { color: var(--gray2); }
+  .btn-primary { width: 100%; background: var(--green); color: #000; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--body); margin-top: 8px; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error { background: rgba(255,92,92,0.1); border: 1px solid rgba(255,92,92,0.3); color: var(--red); padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px; font-family: var(--mono); }
+  .success { background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.3); color: var(--green); padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px; font-family: var(--mono); }
+  .divider { text-align: center; color: var(--gray2); font-size: 11px; font-family: var(--mono); margin: 16px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <span class="logo-text">FreightQuick</span>
+  </div>
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" id="tab-login" onclick="showTab('login')">Sign In</button>
+      <button class="tab" id="tab-signup" onclick="showTab('signup')">Sign Up</button>
+    </div>
+
+    <div id="error-msg" class="error" style="display:none"></div>
+    <div id="success-msg" class="success" style="display:none"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="form-login">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@company.com"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••"/>
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Sign In</button>
+      <div class="divider">Don't have an account? Click Sign Up above</div>
+    </div>
+
+    <!-- SIGNUP FORM -->
+    <div id="form-signup" style="display:none">
+      <div class="field">
+        <label>Company Name</label>
+        <input type="text" id="signup-company" placeholder="ABC Trucking LLC"/>
+      </div>
+      <div class="field">
+        <label>DOT Number (Optional)</label>
+        <input type="text" id="signup-dot" placeholder="1234567"/>
+      </div>
+      <div class="field">
+        <label>Your Full Name</label>
+        <input type="text" id="signup-name" placeholder="John Smith"/>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="signup-email" placeholder="you@company.com"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="signup-password" placeholder="••••••••"/>
+      </div>
+      <button class="btn-primary" onclick="doSignup()">Create Account</button>
+      <div class="divider">Already have an account? Click Sign In above</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "https://freightquick-app.onrender.com/api";
+
+function showTab(tab) {
+  document.getElementById('form-login').style.display = tab==='login' ? 'block' : 'none';
+  document.getElementById('form-signup').style.display = tab==='signup' ? 'block' : 'none';
+  document.getElementById('tab-login').className = 'tab' + (tab==='login' ? ' active' : '');
+  document.getElementById('tab-signup').className = 'tab' + (tab==='signup' ? ' active' : '');
+  hideMessages();
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('success-msg').style.display = 'none';
+}
+
+function showSuccess(msg) {
+  const el = document.getElementById('success-msg');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('error-msg').style.display = 'none';
+}
+
+function hideMessages() {
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('success-msg').style.display = 'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  if(!email || !password) return showError('Please fill in all fields');
+
+  const btn = document.querySelector('#form-login .btn-primary');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+
+  try {
+    const res = await fetch(API+'/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password})
+    });
+    const data = await res.json();
+    if(!res.ok) { showError(data.detail || 'Login failed'); return; }
+    localStorage.setItem('fq_user', JSON.stringify(data));
+    showSuccess('Welcome back, ' + data.full_name + '! Redirecting...');
+    setTimeout(()=>{ window.location.href = 'app.html'; }, 1000);
+  } catch(e) {
+    showError('Connection error. Please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+async function doSignup() {
+  const company_name = document.getElementById('signup-company').value;
+  const dot_number = document.getElementById('signup-dot').value;
+  const full_name = document.getElementById('signup-name').value;
+  const email = document.getElementById('signup-email').value;
+  const password = document.getElementById('signup-password').value;
+  if(!company_name || !full_name || !email || !password) return showError('Please fill in all required fields');
+
+  const btn = document.querySelector('#form-signup .btn-primary');
+  btn.disabled = true; btn.textContent = 'Creating account...';
+
+  try {
+    const res = await fetch(API+'/auth/signup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({company_name, dot_number, full_name, email, password})
+    });
+    const data = await res.json();
+    if(!res.ok) { showError(data.detail || 'Signup failed'); return; }
+    localStorage.setItem('fq_user', JSON.stringify(data));
+    showSuccess('Account created! Redirecting to dashboard...');
+    setTimeout(()=>{ window.location.href = 'app.html'; }, 1000);
+  } catch(e) {
+    showError('Connection error. Please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Account';
+  }
+}
+
+// Check if already logged in
+if(localStorage.getItem('fq_user')) {
+  window.location.href = 'app.html';
+}
+</script>
+</body>
+</html>
+
+
