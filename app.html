@@ -1031,7 +1031,7 @@ function FuelManagerView({drivers}) {
 
   async function loadData() {
     const [r, s] = await Promise.all([apiFetch("/fuel"), apiFetch("/fuel/summary")]);
-    if(r) setRecords(r);
+    if(r && Array.isArray(r)) setRecords(r);
     if(s) setSummary(s);
   }
 
