@@ -180,6 +180,7 @@ async def startup_event():
     print("🚛 FreightQuick API starting...")
     init_db()
     init_compliance_db()
+    init_pay_db()
     print("✅ Database initialized")
 
 @app.get("/")
@@ -530,6 +531,89 @@ async def compliance_summary():
     expiring = sum(1 for r in records if get_compliance_status(r["cdl_expiry"]) == "expiring_soon" or
                    get_compliance_status(r["medical_card_expiry"]) == "expiring_soon")
     return {"total": total, "expired": expired, "expiring_soon": expiring, "compliant": total - expired - expiring}
+
+# ── TRUCKPAY ───────────────────────────────────────────────────────────────
+
+class PayRecord(BaseModel):
+    driver_id: int
+    load_id: Optional[int] = None
+    week_ending: str
+    gross_pay: float
+    fuel_deduction: Optional[float] = 0
+    insurance_deduction: Optional[float] = 0
+    advance_deduction: Optional[float] = 0
+    other_deduction: Optional[float] = 0
+    notes: Optional[str] = ""
+
+def init_pay_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pay_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            driver_id INTEGER NOT NULL,
+            load_id INTEGER,
+            week_ending TEXT NOT NULL,
+            gross_pay REAL DEFAULT 0,
+            fuel_deduction REAL DEFAULT 0,
+            insurance_deduction REAL DEFAULT 0,
+            advance_deduction REAL DEFAULT 0,
+            other_deduction REAL DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (driver_id) REFERENCES drivers(id)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+@app.get("/api/pay")
+async def get_pay_records(driver_id: Optional[int] = None):
+    conn = get_db()
+    query = """
+        SELECT p.*, d.username, d.full_name, d.driver_type
+        FROM pay_records p
+        JOIN drivers d ON p.driver_id = d.id
+    """
+    if driver_id:
+        query += f" WHERE p.driver_id={driver_id}"
+    query += " ORDER BY p.week_ending DESC"
+    records = [dict(row) for row in conn.execute(query).fetchall()]
+    conn.close()
+    for r in records:
+        r["total_deductions"] = r["fuel_deduction"] + r["insurance_deduction"] + r["advance_deduction"] + r["other_deduction"]
+        r["net_pay"] = round(r["gross_pay"] - r["total_deductions"], 2)
+    return records
+
+@app.post("/api/pay")
+async def create_pay_record(record: PayRecord):
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO pay_records (driver_id, load_id, week_ending, gross_pay, fuel_deduction, insurance_deduction, advance_deduction, other_deduction, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (record.driver_id, record.load_id, record.week_ending, record.gross_pay,
+          record.fuel_deduction, record.insurance_deduction, record.advance_deduction,
+          record.other_deduction, record.notes))
+    conn.commit()
+    conn.close()
+    return {"message": "Pay record created"}
+
+@app.get("/api/pay/summary")
+async def pay_summary():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute("""
+        SELECT p.*, d.username, d.full_name
+        FROM pay_records p
+        JOIN drivers d ON p.driver_id = d.id
+    """).fetchall()]
+    conn.close()
+    total_gross = sum(r["gross_pay"] for r in records)
+    total_deductions = sum(r["fuel_deduction"] + r["insurance_deduction"] + r["advance_deduction"] + r["other_deduction"] for r in records)
+    return {
+        "total_gross": round(total_gross, 2),
+        "total_deductions": round(total_deductions, 2),
+        "total_net": round(total_gross - total_deductions, 2),
+        "total_records": len(records)
+    }
 
 if __name__ == "__main__":
     import uvicorn
