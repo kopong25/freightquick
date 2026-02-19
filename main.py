@@ -971,6 +971,18 @@ async def get_company_users(company_id: int):
     conn.close()
     return users
 
+@app.post("/api/auth/make-superadmin")
+async def make_superadmin(data: dict):
+    secret = data.get("secret")
+    email = data.get("email")
+    if secret != "FREIGHTQUICK-SUPER-2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    conn = get_db()
+    conn.execute("UPDATE users SET role='superadmin' WHERE email=?", (email,))
+    conn.commit()
+    conn.close()
+    return {"message": "Superadmin role granted"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
