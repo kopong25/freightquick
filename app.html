@@ -162,15 +162,20 @@ function Sidebar({active,setActive}) {
         ))}
       </div>
       <div style={{padding:"16px 20px",borderTop:"1px solid var(--border)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:30,height:30,borderRadius:"50%",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"var(--gray)"}}>D</div>
-          <div>
-            <div style={{fontSize:12,fontWeight:600}}>Dispatcher</div>
-            <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)"}}>dispatch.lead</div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{width:30,height:30,borderRadius:"50%",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"var(--gray)"}}>
+            {fqUser?.full_name?.slice(0,1)||"D"}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:600}}>{fqUser?.full_name||"Dispatcher"}</div>
+            <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)"}}>{fqUser?.role}</div>
           </div>
         </div>
+        <div style={{display:"flex",gap:6}}>
+          <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>window.location.href="index.html"}>Home</button>
+          <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{localStorage.removeItem("fq_user");window.location.href="auth.html";}}>Logout</button>
+        </div>
       </div>
-    </div>
   );
 }
 
