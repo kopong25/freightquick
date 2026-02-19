@@ -181,6 +181,7 @@ async def startup_event():
     init_db()
     init_compliance_db()
     init_pay_db()
+    init_maintenance_db()
     print("✅ Database initialized")
 
 @app.get("/")
@@ -614,6 +615,84 @@ async def pay_summary():
         "total_net": round(total_gross - total_deductions, 2),
         "total_records": len(records)
     }
+
+# ── TRUCK MAINTENANCE ──────────────────────────────────────────────────────
+
+class MaintenanceRecord(BaseModel):
+    truck_number: str
+    maintenance_type: str
+    last_service_date: str
+    next_service_date: str
+    mileage: Optional[float] = 0
+    cost: Optional[float] = 0
+    notes: Optional[str] = ""
+
+def init_maintenance_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS maintenance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            truck_number TEXT NOT NULL,
+            maintenance_type TEXT NOT NULL,
+            last_service_date TEXT,
+            next_service_date TEXT,
+            mileage REAL DEFAULT 0,
+            cost REAL DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def get_maintenance_status(next_service_date: str):
+    if not next_service_date:
+        return "missing"
+    try:
+        exp = datetime.strptime(next_service_date, "%Y-%m-%d")
+        days_left = (exp - datetime.now()).days
+        if days_left < 0:
+            return "overdue"
+        elif days_left <= 14:
+            return "due_soon"
+        else:
+            return "ok"
+    except:
+        return "missing"
+
+@app.get("/api/maintenance")
+async def get_maintenance():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute(
+        "SELECT * FROM maintenance ORDER BY next_service_date ASC"
+    ).fetchall()]
+    conn.close()
+    for r in records:
+        r["status"] = get_maintenance_status(r["next_service_date"])
+    return records
+
+@app.post("/api/maintenance")
+async def create_maintenance(record: MaintenanceRecord):
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO maintenance (truck_number, maintenance_type, last_service_date, next_service_date, mileage, cost, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (record.truck_number, record.maintenance_type, record.last_service_date,
+          record.next_service_date, record.mileage, record.cost, record.notes))
+    conn.commit()
+    conn.close()
+    return {"message": "Maintenance record created"}
+
+@app.get("/api/maintenance/summary")
+async def maintenance_summary():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute("SELECT * FROM maintenance").fetchall()]
+    conn.close()
+    total = len(records)
+    overdue = sum(1 for r in records if get_maintenance_status(r["next_service_date"]) == "overdue")
+    due_soon = sum(1 for r in records if get_maintenance_status(r["next_service_date"]) == "due_soon")
+    total_cost = sum(r["cost"] for r in records)
+    return {"total": total, "overdue": overdue, "due_soon": due_soon, "ok": total-overdue-due_soon, "total_cost": round(total_cost, 2)}
 
 if __name__ == "__main__":
     import uvicorn
