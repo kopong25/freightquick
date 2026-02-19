@@ -982,7 +982,20 @@ async def make_superadmin(data: dict):
     conn.commit()
     conn.close()
     return {"message": "Superadmin role granted"}
-
+@app.get("/api/superadmin/companies")
+async def get_all_companies():
+    conn = get_db()
+    companies = [dict(row) for row in conn.execute("""
+        SELECT c.*, COUNT(u.id) as total_users,
+               SUM(CASE WHEN u.role='manager' THEN 1 ELSE 0 END) as managers,
+               SUM(CASE WHEN u.role='driver' THEN 1 ELSE 0 END) as drivers
+        FROM companies c
+        LEFT JOIN users u ON c.id = u.company_id
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+    """).fetchall()]
+    conn.close()
+    return companies
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
