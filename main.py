@@ -6,6 +6,8 @@ import sqlite3
 from datetime import datetime, timedelta
 import random
 import os
+import hashlib
+import secrets
 
 app = FastAPI(title="FreightQuick API", version="1.0.0")
 
@@ -58,6 +60,22 @@ class MatchRequest(BaseModel):
 
 class OptimizeRequest(BaseModel):
     assignment_id: int
+
+class CompanySignup(BaseModel):
+    company_name: str
+    dot_number: Optional[str] = ""
+    email: str
+    password: str
+    full_name: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class InviteDriver(BaseModel):
+    email: str
+    full_name: str
+    company_id: int
 
 # ── DATABASE ───────────────────────────────────────────────────────────────
 
@@ -184,6 +202,7 @@ async def startup_event():
     init_maintenance_db()
     init_fuel_db()
     init_insurance_db()
+    init_auth_db()
     print("✅ Database initialized")
 
 @app.get("/")
@@ -832,6 +851,125 @@ async def insurance_summary():
     expiring = sum(1 for p in policies if get_compliance_status(p["expiry_date"]) == "expiring_soon")
     total_premium = sum(p["premium"] for p in policies)
     return {"total": total, "expired": expired, "expiring_soon": expiring, "compliant": total - expired - expiring, "total_premium": round(total_premium, 2)}
+
+# ── AUTH ───────────────────────────────────────────────────────────────────
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def init_auth_db():
+    conn = get_db()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS companies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name TEXT NOT NULL,
+            dot_number TEXT,
+            email TEXT UNIQUE NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT DEFAULT 'driver',
+            invite_token TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id)
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+@app.post("/api/auth/signup")
+async def company_signup(data: CompanySignup):
+    conn = get_db()
+    try:
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO companies (company_name, dot_number, email)
+            VALUES (?, ?, ?)
+        """, (data.company_name, data.dot_number, data.email))
+        company_id = c.lastrowid
+
+        c.execute("""
+            INSERT INTO users (company_id, full_name, email, password_hash, role)
+            VALUES (?, ?, ?, ?, 'manager')
+        """, (company_id, data.full_name, data.email, hash_password(data.password)))
+        user_id = c.lastrowid
+
+        conn.commit()
+        conn.close()
+        return {"message": "Account created", "user_id": user_id, "company_id": company_id, "role": "manager", "full_name": data.full_name, "company_name": data.company_name}
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+@app.post("/api/auth/login")
+async def login(data: UserLogin):
+    conn = get_db()
+    user = conn.execute("""
+        SELECT u.*, c.company_name FROM users u
+        JOIN companies c ON u.company_id = c.id
+        WHERE u.email=? AND u.password_hash=?
+    """, (data.email, hash_password(data.password))).fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    user = dict(user)
+    return {
+        "user_id": user["id"],
+        "company_id": user["company_id"],
+        "full_name": user["full_name"],
+        "email": user["email"],
+        "role": user["role"],
+        "company_name": user["company_name"]
+    }
+
+@app.post("/api/auth/invite")
+async def invite_driver(data: InviteDriver):
+    conn = get_db()
+    token = secrets.token_urlsafe(32)
+    try:
+        conn.execute("""
+            INSERT INTO users (company_id, full_name, email, password_hash, role, invite_token, is_active)
+            VALUES (?, ?, ?, ?, 'driver', ?, 0)
+        """, (data.company_id, data.full_name, data.email, "", token))
+        conn.commit()
+        conn.close()
+        return {"message": "Driver invited", "invite_token": token, "invite_link": f"/app.html?invite={token}"}
+    except:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+@app.post("/api/auth/accept-invite")
+async def accept_invite(data: dict):
+    token = data.get("token")
+    password = data.get("password")
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE invite_token=?", (token,)).fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Invalid invite token")
+    conn.execute("""
+        UPDATE users SET password_hash=?, is_active=1, invite_token=NULL WHERE invite_token=?
+    """, (hash_password(password), token))
+    conn.commit()
+    conn.close()
+    return {"message": "Account activated"}
+
+@app.get("/api/auth/company/{company_id}/users")
+async def get_company_users(company_id: int):
+    conn = get_db()
+    users = [dict(row) for row in conn.execute("""
+        SELECT id, full_name, email, role, is_active, created_at
+        FROM users WHERE company_id=?
+    """, (company_id,)).fetchall()]
+    conn.close()
+    return users
 
 if __name__ == "__main__":
     import uvicorn
