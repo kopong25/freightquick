@@ -179,6 +179,7 @@ def init_db():
 async def startup_event():
     print("🚛 FreightQuick API starting...")
     init_db()
+    init_compliance_db()
     print("✅ Database initialized")
 
 @app.get("/")
@@ -440,6 +441,95 @@ async def get_analytics():
         "daily_trend": daily_trend,
         "driver_utilization": utilization
     }
+# ── DOT COMPLIANCE ─────────────────────────────────────────────────────────
+
+class ComplianceRecord(BaseModel):
+    driver_id: int
+    cdl_expiry: Optional[str] = None
+    medical_card_expiry: Optional[str] = None
+    mvr_date: Optional[str] = None
+    drug_test_date: Optional[str] = None
+    annual_inspection_expiry: Optional[str] = None
+    notes: Optional[str] = ""
+
+def init_compliance_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS compliance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            driver_id INTEGER UNIQUE NOT NULL,
+            cdl_expiry TEXT,
+            medical_card_expiry TEXT,
+            mvr_date TEXT,
+            drug_test_date TEXT,
+            annual_inspection_expiry TEXT,
+            notes TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (driver_id) REFERENCES drivers(id)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def get_compliance_status(expiry_date: str):
+    if not expiry_date:
+        return "missing"
+    try:
+        exp = datetime.strptime(expiry_date, "%Y-%m-%d")
+        days_left = (exp - datetime.now()).days
+        if days_left < 0:
+            return "expired"
+        elif days_left <= 30:
+            return "expiring_soon"
+        else:
+            return "ok"
+    except:
+        return "missing"
+
+@app.get("/api/compliance")
+async def get_compliance():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute("""
+        SELECT c.*, d.username, d.full_name, d.driver_type
+        FROM compliance c
+        JOIN drivers d ON c.driver_id = d.id
+        ORDER BY d.full_name
+    """).fetchall()]
+    conn.close()
+    result = []
+    for r in records:
+        r["cdl_status"] = get_compliance_status(r["cdl_expiry"])
+        r["medical_status"] = get_compliance_status(r["medical_card_expiry"])
+        r["inspection_status"] = get_compliance_status(r["annual_inspection_expiry"])
+        r["drug_test_status"] = get_compliance_status(r["drug_test_date"])
+        result.append(r)
+    return result
+
+@app.post("/api/compliance")
+async def create_compliance(record: ComplianceRecord):
+    conn = get_db()
+    conn.execute("""
+        INSERT OR REPLACE INTO compliance 
+        (driver_id, cdl_expiry, medical_card_expiry, mvr_date, drug_test_date, annual_inspection_expiry, notes, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (record.driver_id, record.cdl_expiry, record.medical_card_expiry,
+          record.mvr_date, record.drug_test_date, record.annual_inspection_expiry,
+          record.notes, datetime.now().strftime("%Y-%m-%d")))
+    conn.commit()
+    conn.close()
+    return {"message": "Compliance record saved"}
+
+@app.get("/api/compliance/summary")
+async def compliance_summary():
+    conn = get_db()
+    records = [dict(row) for row in conn.execute("SELECT * FROM compliance").fetchall()]
+    conn.close()
+    total = len(records)
+    expired = sum(1 for r in records if get_compliance_status(r["cdl_expiry"]) == "expired" or
+                  get_compliance_status(r["medical_card_expiry"]) == "expired")
+    expiring = sum(1 for r in records if get_compliance_status(r["cdl_expiry"]) == "expiring_soon" or
+                   get_compliance_status(r["medical_card_expiry"]) == "expiring_soon")
+    return {"total": total, "expired": expired, "expiring_soon": expiring, "compliant": total - expired - expiring}
 
 if __name__ == "__main__":
     import uvicorn

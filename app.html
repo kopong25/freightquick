@@ -130,6 +130,7 @@ const NAV = [
   {id:"loads",icon:"📦",label:"Loads"},
   {id:"drivers",icon:"👤",label:"Drivers"},
   {id:"routes",icon:"🗺️",label:"Routes"},
+  {id:"compliance",icon:"📋",label:"Compliance"},
 ];
 
 function Sidebar({active,setActive}) {
@@ -627,6 +628,134 @@ function RoutesView({drivers,loads}) {
   );
 }
 
+
+// ── COMPLIANCE VIEW ────────────────────────────────────────────────────────
+function ComplianceView({drivers}) {
+  const [records, setRecords] = useState([]);
+  const [summary, setSummary] = useState({total:0,expired:0,expiring_soon:0,compliant:0});
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({driver_id:"",cdl_expiry:"",medical_card_expiry:"",drug_test_date:"",annual_inspection_expiry:"",notes:""});
+  const [toast, setToast] = useState(null);
+
+  useEffect(()=>{ loadData(); },[]);
+
+  async function loadData() {
+    const [r, s] = await Promise.all([apiFetch("/compliance"), apiFetch("/compliance/summary")]);
+    if(r) setRecords(r);
+    if(s) setSummary(s);
+  }
+
+  async function saveRecord(e) {
+    e.preventDefault();
+    await apiFetch("/compliance", {method:"POST", body:JSON.stringify({...form, driver_id:+form.driver_id})});
+    await loadData();
+    setShowAdd(false);
+    setToast("✅ Compliance record saved");
+    setTimeout(()=>setToast(null), 3000);
+  }
+
+  function StatusBadge({status}) {
+    const map = {ok:["tag-green","✓ OK"], expiring_soon:["tag-yellow","⚠ EXPIRING"], expired:["tag-red","✗ EXPIRED"], missing:["tag-gray","— MISSING"]};
+    const [cls, label] = map[status]||["tag-gray","UNKNOWN"];
+    return <span className={`tag ${cls}`}>{label}</span>;
+  }
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24}}>
+      {toast && <div style={{background:"var(--green)",color:"var(--black)",padding:"10px 20px",fontFamily:"var(--mono)",fontSize:12,fontWeight:600,textAlign:"center",marginBottom:16,borderRadius:8}}>{toast}</div>}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>DOT Compliance</div>
+          <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Compliance Manager</div>
+        </div>
+        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Record</button>
+      </div>
+
+      {/* Summary Cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+        <KpiCard label="Total Records" value={summary.total} sub="Drivers tracked"/>
+        <KpiCard label="Compliant" value={summary.compliant} sub="All docs valid" color="var(--green)"/>
+        <KpiCard label="Expiring Soon" value={summary.expiring_soon} sub="Within 30 days" color="var(--yellow)"/>
+        <KpiCard label="Expired" value={summary.expired} sub="Needs attention" color="var(--red)"/>
+      </div>
+
+      {/* Add Form */}
+      {showAdd && (
+        <form onSubmit={saveRecord} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:16}}>New Compliance Record</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>DRIVER</div>
+              <select value={form.driver_id} onChange={e=>setForm(p=>({...p,driver_id:e.target.value}))} style={{width:"100%"}} required>
+                <option value="">Select driver...</option>
+                {drivers.map(d=><option key={d.id} value={d.id}>{d.username} — {d.full_name}</option>)}
+              </select>
+            </div>
+            {[["cdl_expiry","CDL Expiry"],["medical_card_expiry","Medical Card Expiry"],["drug_test_date","Last Drug Test"],["annual_inspection_expiry","Annual Inspection Expiry"]].map(([k,lbl])=>(
+              <div key={k}>
+                <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>{lbl.toUpperCase()}</div>
+                <input type="date" value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{width:"100%"}}/>
+              </div>
+            ))}
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>NOTES</div>
+              <input value={form.notes} onChange={e=>setForm(p=>({...p,notes:e.target.value}))} style={{width:"100%"}} placeholder="Optional notes..."/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:14}}>
+            <button type="submit" className="btn btn-green">Save Record</button>
+            <button type="button" className="btn btn-ghost" onClick={()=>setShowAdd(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {/* Records Table */}
+      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{borderBottom:"1px solid var(--border)"}}>
+              {["Driver","Type","CDL","Medical Card","Drug Test","Annual Inspection","Notes"].map(h=>(
+                <th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {records.map(r=>(
+              <tr key={r.id} style={{borderBottom:"1px solid var(--border)"}}
+                onMouseEnter={e=>e.currentTarget.style.background="var(--bg3)"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <td style={{padding:"12px 16px"}}>
+                  <div style={{fontWeight:600,fontSize:13}}>{r.username}</div>
+                  <div style={{fontSize:11,color:"var(--gray)"}}>{r.full_name}</div>
+                </td>
+                <td style={{padding:"12px 16px"}}><span className="tag tag-gray">{r.driver_type}</span></td>
+                <td style={{padding:"12px 16px"}}>
+                  <StatusBadge status={r.cdl_status}/>
+                  <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:3}}>{r.cdl_expiry||"—"}</div>
+                </td>
+                <td style={{padding:"12px 16px"}}>
+                  <StatusBadge status={r.medical_status}/>
+                  <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:3}}>{r.medical_card_expiry||"—"}</div>
+                </td>
+                <td style={{padding:"12px 16px"}}>
+                  <StatusBadge status={r.drug_test_status}/>
+                  <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:3}}>{r.drug_test_date||"—"}</div>
+                </td>
+                <td style={{padding:"12px 16px"}}>
+                  <StatusBadge status={r.inspection_status}/>
+                  <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:3}}>{r.annual_inspection_expiry||"—"}</div>
+                </td>
+                <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)"}}>{r.notes||"—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {records.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No compliance records yet. Click + Add Record to get started.</div>}
+      </div>
+    </div>
+  );
+}
+
 // ── TOP BAR ────────────────────────────────────────────────────────────────
 function TopBar({view}) {
   const labels = {analytics:"Analytics Overview",dispatch:"Dispatch Management",loads:"Load Management",drivers:"Driver Management",routes:"Route Optimization"};
@@ -673,6 +802,7 @@ function App() {
         {view==="loads"&&<LoadsView loads={loads} onRefresh={refresh}/>}
         {view==="drivers"&&<DriversView drivers={drivers} onRefresh={refresh}/>}
         {view==="routes"&&<RoutesView drivers={drivers} loads={loads}/>}
+        {view==="compliance"&&<ComplianceView drivers={drivers}/>}
       </div>
     </div>
   );
