@@ -135,7 +135,8 @@ const NAV = [
   {id:"compliance",icon:"📋",label:"Compliance"},
   {id:"truckpay",icon:"💰",label:"TruckPay"},
    {id:"insurance",icon:"🛡️",label:"Insurance"},
-  {id:"companies",icon:"🏢",label:"Companies"},
+ {id:"companies",icon:"🏢",label:"Companies"},
+  {id:"inspection",icon:"🚚",label:"Inspection"},
 ];
 
 function Sidebar({active,setActive}) {
@@ -1283,6 +1284,293 @@ function InsuranceView() {
   );
 }
 
+// ── INSPECTION VIEW ────────────────────────────────────────────────────────
+const CHECKLIST_ITEMS = [
+  {id:"front_bumper",label:"Front Bumper",icon:"🚗"},
+  {id:"rear_bumper",label:"Rear Bumper",icon:"🚗"},
+  {id:"left_side",label:"Left Side Panel",icon:"🔲"},
+  {id:"right_side",label:"Right Side Panel",icon:"🔲"},
+  {id:"windshield",label:"Windshield",icon:"🪟"},
+  {id:"headlights",label:"Headlights",icon:"💡"},
+  {id:"tail_lights",label:"Tail Lights",icon:"🔴"},
+  {id:"mirrors",label:"Side Mirrors",icon:"🔍"},
+  {id:"tires",label:"Tires & Wheels",icon:"⚙️"},
+  {id:"fuel_level",label:"Fuel Level",icon:"⛽"},
+  {id:"interior",label:"Interior Condition",icon:"🪑"},
+  {id:"brakes",label:"Brakes",icon:"🛑"},
+];
+
+const VEHICLES = [
+  {id:"TRK-001",name:"Truck 001",type:"Cargo Truck",plate:"XA-2341"},
+  {id:"VAN-012",name:"Van 012",type:"Delivery Van",plate:"GH-8812"},
+  {id:"BUS-003",name:"Bus 003",type:"Passenger Bus",plate:"KL-5590"},
+  {id:"TRK-007",name:"Truck 007",type:"Flatbed Truck",plate:"MN-1127"},
+];
+
+function InspectionView({drivers}) {
+  const [step, setStep] = useState(1);
+  const [driver, setDriver] = useState(null);
+  const [vehicle, setVehicle] = useState(null);
+  const [checklistState, setChecklistState] = useState({});
+  const [notes, setNotes] = useState({});
+  const [photos, setPhotos] = useState({});
+  const [inspections, setInspections] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [subview, setSubview] = useState("dashboard");
+  const [submitting, setSubmitting] = useState(false);
+  const currentTime = new Date().toLocaleString("en-US",{month:"short",day:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
+  function toggleCheck(id, val) { setChecklistState(prev=>({...prev,[id]:val})); }
+  function getProgress() { return Math.round((Object.keys(checklistState).length/CHECKLIST_ITEMS.length)*100); }
+  function getDamageItems() { return CHECKLIST_ITEMS.filter(i=>checklistState[i.id]==="damaged"); }
+
+  function submitInspection() {
+    setSubmitting(true);
+    setTimeout(()=>{
+      const ins = {
+        id:`INS-${2391+inspections.length+1}`,
+        driver:driver?.full_name||driver?.username,
+        vehicle:vehicle.id,
+        plate:vehicle.plate,
+        timestamp:currentTime,
+        status:getDamageItems().length>0?"issues":"clear",
+        issues:getDamageItems().map(i=>i.label),
+      };
+      setInspections(prev=>[ins,...prev]);
+      if(getDamageItems().length>0) {
+        setAlerts(prev=>[{id:Date.now(),type:"damage",message:`${vehicle.id} — Damage: ${getDamageItems().map(i=>i.label).join(", ")} by ${driver?.full_name||driver?.username}`,time:"Just now",read:false},...prev]);
+      }
+      setSubmitting(false);
+      setStep(4);
+    },1500);
+  }
+
+  function resetForm() { setDriver(null);setVehicle(null);setChecklistState({});setNotes({});setPhotos({});setStep(1);setSubview("dashboard"); }
+
+  const unread = alerts.filter(a=>!a.read).length;
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24,background:"var(--bg)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Fleet Management</div>
+          <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Vehicle Inspection</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          {["dashboard","inspect","history","alerts"].map(v=>(
+            <button key={v} className="btn btn-ghost btn-sm" onClick={()=>{setSubview(v);if(v==="inspect")setStep(1);}}
+              style={{background:subview===v?"var(--green-glow)":"transparent",color:subview===v?"var(--green)":"var(--gray)",borderColor:subview===v?"rgba(255,107,53,0.3)":"var(--border)",position:"relative"}}>
+              {v==="alerts"&&unread>0&&<span style={{position:"absolute",top:-6,right:-6,background:"var(--red)",color:"#fff",borderRadius:"50%",width:14,height:14,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{unread}</span>}
+              {v.charAt(0).toUpperCase()+v.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* DASHBOARD */}
+      {subview==="dashboard"&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+            <KpiCard label="Inspections Today" value={inspections.length} sub="Submitted"/>
+            <KpiCard label="Issues Reported" value={inspections.filter(i=>i.status==="issues").length} sub="Vehicles with damage" color="var(--yellow)"/>
+            <KpiCard label="Clear" value={inspections.filter(i=>i.status==="clear").length} sub="No issues" color="var(--green)"/>
+            <KpiCard label="Alerts" value={unread} sub="Unread" color="var(--red)"/>
+          </div>
+          <button className="btn btn-green" onClick={()=>{setSubview("inspect");setStep(1);}}>+ New Inspection</button>
+          <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden",marginTop:20}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
+                {["ID","Driver","Vehicle","Time","Status"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase"}}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {inspections.map(ins=>(
+                  <tr key={ins.id} style={{borderBottom:"1px solid var(--border)"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="var(--bg3)"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <td style={{padding:"12px 16px",fontFamily:"var(--mono)",fontSize:11,color:"var(--green)"}}>{ins.id}</td>
+                    <td style={{padding:"12px 16px",fontSize:13}}>{ins.driver}</td>
+                    <td style={{padding:"12px 16px",fontSize:13}}>{ins.vehicle} · {ins.plate}</td>
+                    <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)",fontFamily:"var(--mono)"}}>{ins.timestamp}</td>
+                    <td style={{padding:"12px 16px"}}><span className={`tag ${ins.status==="clear"?"tag-green":"tag-red"}`}>{ins.status==="clear"?"✓ CLEAR":"⚠ ISSUES"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {inspections.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No inspections yet. Click + New Inspection to start.</div>}
+          </div>
+        </div>
+      )}
+
+      {/* INSPECT */}
+      {subview==="inspect"&&(
+        <div>
+          {/* Steps */}
+          <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:24}}>
+            {["Select","Checklist","Confirm","Done"].map((s,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",flex:i<3?1:0}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:step>i+1?"var(--green)":step===i+1?"rgba(255,107,53,0.2)":"var(--bg3)",border:`2px solid ${step>=i+1?"var(--green)":"var(--border)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:step>i+1?"#000":step===i+1?"var(--green)":"var(--gray)",fontWeight:700}}>
+                  {step>i+1?"✓":i+1}
+                </div>
+                {i<3&&<div style={{flex:1,height:2,background:step>i+1?"var(--green)":"var(--border)"}}></div>}
+              </div>
+            ))}
+          </div>
+
+          {/* Step 1 */}
+          {step===1&&(
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
+                <div>
+                  <div style={{fontSize:11,fontFamily:"var(--mono)",color:"var(--green)",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Select Driver</div>
+                  {drivers.map(d=>(
+                    <div key={d.id} onClick={()=>setDriver(d)} style={{padding:"12px 16px",marginBottom:8,borderRadius:10,cursor:"pointer",background:driver?.id===d.id?"var(--green-glow)":"var(--bg2)",border:`1px solid ${driver?.id===d.id?"rgba(255,107,53,0.4)":"var(--border)"}`,display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{width:36,height:36,borderRadius:"50%",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)"}}>{d.username?.slice(0,2)}</div>
+                      <div>
+                        <div style={{fontWeight:600,fontSize:13}}>{d.full_name}</div>
+                        <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)"}}>{d.driver_type}</div>
+                      </div>
+                      {driver?.id===d.id&&<span style={{marginLeft:"auto",color:"var(--green)"}}>✓</span>}
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{fontSize:11,fontFamily:"var(--mono)",color:"var(--green)",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Select Vehicle</div>
+                  {VEHICLES.map(v=>(
+                    <div key={v.id} onClick={()=>setVehicle(v)} style={{padding:"12px 16px",marginBottom:8,borderRadius:10,cursor:"pointer",background:vehicle?.id===v.id?"var(--green-glow)":"var(--bg2)",border:`1px solid ${vehicle?.id===v.id?"rgba(255,107,53,0.4)":"var(--border)"}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <div style={{fontWeight:600,fontSize:13}}>{v.name}</div>
+                        {vehicle?.id===v.id&&<span style={{color:"var(--green)"}}>✓</span>}
+                      </div>
+                      <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:4}}>{v.type} · {v.plate}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button className="btn btn-green" onClick={()=>driver&&vehicle&&setStep(2)} style={{opacity:driver&&vehicle?1:0.4}}>Start Inspection →</button>
+            </div>
+          )}
+
+          {/* Step 2 */}
+          {step===2&&(
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontSize:12,color:"var(--gray)",fontFamily:"var(--mono)"}}>{getProgress()}% Complete</span>
+                <span style={{fontSize:12,color:"var(--gray)",fontFamily:"var(--mono)"}}>{Object.keys(checklistState).length}/{CHECKLIST_ITEMS.length} items</span>
+              </div>
+              <div style={{height:4,background:"var(--bg3)",borderRadius:2,marginBottom:20,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${getProgress()}%`,background:"var(--green)",borderRadius:2,transition:"width 0.3s"}}></div>
+              </div>
+              {CHECKLIST_ITEMS.map(item=>(
+                <div key={item.id} style={{padding:"14px 16px",marginBottom:8,borderRadius:10,background:checklistState[item.id]==="ok"?"rgba(0,100,0,0.1)":checklistState[item.id]==="damaged"?"rgba(100,0,0,0.1)":"var(--bg2)",border:`1px solid ${checklistState[item.id]==="ok"?"rgba(0,200,0,0.2)":checklistState[item.id]==="damaged"?"rgba(200,0,0,0.2)":"var(--border)"}`}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:18}}>{item.icon}</span>
+                      <span style={{fontSize:13,fontWeight:500}}>{item.label}</span>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button className="btn btn-sm" onClick={()=>toggleCheck(item.id,"ok")} style={{background:checklistState[item.id]==="ok"?"rgba(0,200,0,0.2)":"transparent",color:checklistState[item.id]==="ok"?"#4ADE80":"var(--gray)",border:`1px solid ${checklistState[item.id]==="ok"?"#16a34a":"var(--border)"}`}}>✓ OK</button>
+                      <button className="btn btn-sm" onClick={()=>toggleCheck(item.id,"damaged")} style={{background:checklistState[item.id]==="damaged"?"rgba(200,0,0,0.2)":"transparent",color:checklistState[item.id]==="damaged"?"var(--red)":"var(--gray)",border:`1px solid ${checklistState[item.id]==="damaged"?"var(--red)":"var(--border)"}`}}>✗ DAMAGED</button>
+                    </div>
+                  </div>
+                  {checklistState[item.id]==="damaged"&&(
+                    <textarea value={notes[item.id]||""} onChange={e=>setNotes(p=>({...p,[item.id]:e.target.value}))} placeholder="Describe the damage..." style={{width:"100%",marginTop:10,background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--white)",padding:"8px 12px",borderRadius:8,fontFamily:"var(--body)",fontSize:12,resize:"vertical",minHeight:60}}/>
+                  )}
+                </div>
+              ))}
+              <div style={{display:"flex",gap:10,marginTop:16}}>
+                <button className="btn btn-ghost" onClick={()=>setStep(1)}>← Back</button>
+                <button className="btn btn-green" onClick={()=>getProgress()===100&&setStep(3)} style={{opacity:getProgress()===100?1:0.4}}>Review & Submit →</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3 */}
+          {step===3&&(
+            <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+              <div style={{fontFamily:"var(--display)",fontSize:16,fontWeight:700,marginBottom:16}}>Inspection Summary</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                <div><div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:4}}>DRIVER</div><div style={{fontWeight:600}}>{driver?.full_name}</div></div>
+                <div><div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:4}}>VEHICLE</div><div style={{fontWeight:600}}>{vehicle?.id} · {vehicle?.plate}</div></div>
+                <div><div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:4}}>TIME</div><div style={{fontSize:12}}>{currentTime}</div></div>
+                <div><div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:4}}>ITEMS CHECKED</div><div style={{fontWeight:600}}>{CHECKLIST_ITEMS.length}</div></div>
+              </div>
+              <div style={{display:"flex",gap:20,marginBottom:16}}>
+                <div><div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)"}}>OK</div><div style={{fontSize:24,fontWeight:800,color:"var(--green)"}}>{CHECKLIST_ITEMS.filter(i=>checklistState[i.id]==="ok").length}</div></div>
+                <div><div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)"}}>DAMAGED</div><div style={{fontSize:24,fontWeight:800,color:"var(--red)"}}>{getDamageItems().length}</div></div>
+              </div>
+              {getDamageItems().length>0&&(
+                <div style={{background:"rgba(100,0,0,0.1)",border:"1px solid rgba(200,0,0,0.2)",borderRadius:8,padding:12,marginBottom:16}}>
+                  <div style={{fontSize:11,color:"var(--red)",fontFamily:"var(--mono)",marginBottom:8}}>⚠ DAMAGE REPORTED</div>
+                  {getDamageItems().map(i=><div key={i.id} style={{fontSize:12,marginBottom:4}}>{i.icon} {i.label}{notes[i.id]&&` — ${notes[i.id]}`}</div>)}
+                </div>
+              )}
+              <div style={{display:"flex",gap:10}}>
+                <button className="btn btn-ghost" onClick={()=>setStep(2)}>← Edit</button>
+                <button className="btn btn-green" onClick={submitInspection} disabled={submitting}>{submitting?"Submitting...":"✓ Submit Inspection"}</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4 */}
+          {step===4&&(
+            <div style={{textAlign:"center",paddingTop:40}}>
+              <div style={{width:72,height:72,borderRadius:"50%",background:"rgba(0,100,0,0.2)",border:"2px solid #16a34a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 24px"}}>✓</div>
+              <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,marginBottom:10}}>Inspection Submitted!</div>
+              <div style={{fontSize:13,color:"var(--gray)",marginBottom:20}}>{getDamageItems().length>0?"⚠ Damage reported — Management has been alerted":"✓ Vehicle cleared — No issues detected"}</div>
+              <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+                <button className="btn btn-green" onClick={resetForm}>+ New Inspection</button>
+                <button className="btn btn-ghost" onClick={()=>{resetForm();setSubview("history");}}>View History</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HISTORY */}
+      {subview==="history"&&(
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
+              {["ID","Driver","Vehicle","Time","Status","Issues"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase"}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {inspections.map(ins=>(
+                <tr key={ins.id} style={{borderBottom:"1px solid var(--border)"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--bg3)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <td style={{padding:"12px 16px",fontFamily:"var(--mono)",fontSize:11,color:"var(--green)"}}>{ins.id}</td>
+                  <td style={{padding:"12px 16px",fontSize:13}}>{ins.driver}</td>
+                  <td style={{padding:"12px 16px",fontSize:13}}>{ins.vehicle} · {ins.plate}</td>
+                  <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)",fontFamily:"var(--mono)"}}>{ins.timestamp}</td>
+                  <td style={{padding:"12px 16px"}}><span className={`tag ${ins.status==="clear"?"tag-green":"tag-red"}`}>{ins.status==="clear"?"✓ CLEAR":"⚠ ISSUES"}</span></td>
+                  <td style={{padding:"12px 16px",fontSize:11,color:"var(--gray)"}}>{ins.issues.join(", ")||"—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {inspections.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No inspections yet.</div>}
+        </div>
+      )}
+
+      {/* ALERTS */}
+      {subview==="alerts"&&(
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+          {alerts.map(a=>(
+            <div key={a.id} style={{padding:"16px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"flex-start",gap:12,background:a.type==="damage"?"rgba(100,0,0,0.05)":"transparent",opacity:a.read?0.5:1}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:a.type==="damage"?"var(--red)":"var(--yellow)",flexShrink:0,marginTop:4}}></div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,marginBottom:4}}>{a.message}</div>
+                <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)"}}>{a.time}</div>
+              </div>
+              {!a.read&&<button className="btn btn-ghost btn-sm" onClick={()=>setAlerts(prev=>prev.map(x=>x.id===a.id?{...x,read:true}:x))}>Mark read</button>}
+            </div>
+          ))}
+          {alerts.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No alerts.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 // ── COMPANIES VIEW (SUPERADMIN) ────────────────────────────────────────────
 function CompaniesView() {
   const [companies, setCompanies] = useState([]);
@@ -1392,6 +1680,7 @@ function App() {
         {view==="truckpay"&&<TruckPayView drivers={drivers}/>}
         {view==="insurance"&&<InsuranceView/>}
         {view==="companies"&&<CompaniesView/>}
+        {view==="inspection"&&<InspectionView drivers={drivers}/>}
         {view==="maintenance"&&<MaintenanceView/>}
         {view==="fuel"&&<FuelManagerView drivers={drivers}/>}
       </div>
