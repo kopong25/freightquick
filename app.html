@@ -176,9 +176,9 @@ function Sidebar({active,setActive}) {
           <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{localStorage.removeItem("fq_user");window.location.href="auth.html";}}>Logout</button>
         </div>
       </div>
+    </div>
   );
 }
-
 // ── ANALYTICS VIEW ─────────────────────────────────────────────────────────
 function AnalyticsView({data}) {
   const s = data.summary;
