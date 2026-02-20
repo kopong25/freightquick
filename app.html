@@ -135,8 +135,7 @@ const NAV = [
   {id:"compliance",icon:"📋",label:"Compliance"},
   {id:"truckpay",icon:"💰",label:"TruckPay"},
   {id:"insurance",icon:"🛡️",label:"Insurance"},
-  ...(fqUser?.role==="superadmin"?[{id:"companies",icon:"🏢",label:"Companies"}]:[]),
-];
+  ,];
 
 function Sidebar({active,setActive}) {
   return (
