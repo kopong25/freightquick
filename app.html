@@ -102,7 +102,12 @@ const MOCK = {
 // ── HELPERS ────────────────────────────────────────────────────────────────
 async function apiFetch(path, opts={}) {
   try {
-    const r = await fetch(API+path, {headers:{"Content-Type":"application/json"},...opts});
+    const companyId = fqUser?.company_id;
+    const separator = path.includes("?") ? "&" : "?";
+    const fullPath = companyId && !path.includes("auth") && !path.includes("superadmin")
+      ? `${path}${separator}company_id=${companyId}`
+      : path;
+    const r = await fetch(API+fullPath, {headers:{"Content-Type":"application/json"},...opts});
     return await r.json();
   } catch { return null; }
 }
