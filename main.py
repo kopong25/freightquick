@@ -242,9 +242,15 @@ def init_db():
             company_name TEXT NOT NULL,
             dot_number TEXT,
             email TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            trial_ends_at TIMESTAMP,
+            is_subscribed INTEGER DEFAULT 0
         )
     """)
+    # Add trial columns if they don't exist
+    c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP")
+    c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_subscribed INTEGER DEFAULT 0")
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -662,8 +668,9 @@ async def company_signup(data: CompanySignup):
     conn = get_db()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO companies (company_name,dot_number,email) VALUES (%s,%s,%s) RETURNING id",
-                  (data.company_name,data.dot_number,data.email))
+        trial_ends = datetime.now() + timedelta(days=14)
+        c.execute("INSERT INTO companies (company_name,dot_number,email,trial_ends_at,is_subscribed) VALUES (%s,%s,%s,%s,0) RETURNING id",
+                  (data.company_name,data.dot_number,data.email,trial_ends))
         company_id = c.fetchone()[0]
         c.execute("INSERT INTO users (company_id,full_name,email,password_hash,role) VALUES (%s,%s,%s,%s,'manager') RETURNING id",
                   (company_id,data.full_name,data.email,hash_password(data.password)))
@@ -785,6 +792,28 @@ async def get_plans():
 async def debug_stripe():
     key = os.environ.get("STRIPE_SECRET_KEY")
     return {"key_exists": key is not None, "key_prefix": key[:10] if key else None}
+
+@app.get("/api/trial/status/{company_id}")
+async def trial_status(company_id: int):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT trial_ends_at, is_subscribed FROM companies WHERE id=%s", (company_id,))
+    company = c.fetchone()
+    conn.close()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company = dict(company)
+    trial_ends = company["trial_ends_at"]
+    is_subscribed = company["is_subscribed"]
+    if is_subscribed:
+        return {"status": "subscribed", "days_left": None}
+    if trial_ends:
+        days_left = (trial_ends - datetime.now()).days
+        if days_left > 0:
+            return {"status": "trial", "days_left": days_left}
+        else:
+            return {"status": "expired", "days_left": 0}
+    return {"status": "trial", "days_left": 14}
 
 if __name__ == "__main__":
     import uvicorn
