@@ -137,6 +137,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS drivers (
             id SERIAL PRIMARY KEY,
+            company_id INTEGER DEFAULT 1,
             username TEXT UNIQUE NOT NULL,
             full_name TEXT NOT NULL,
             status TEXT DEFAULT 'available',
@@ -151,6 +152,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS loads (
             id SERIAL PRIMARY KEY,
+            company_id INTEGER DEFAULT 1,
             load_number TEXT UNIQUE NOT NULL,
             origin TEXT NOT NULL,
             destination TEXT NOT NULL,
@@ -309,10 +311,14 @@ async def root():
 # ── DRIVERS ────────────────────────────────────────────────────────────────
 
 @app.get("/api/drivers")
-async def get_drivers(status: Optional[str] = None):
+async def get_drivers(status: Optional[str] = None, company_id: Optional[int] = None):
     conn = get_db()
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    if status:
+    if company_id and status:
+        c.execute("SELECT * FROM drivers WHERE company_id=%s AND status=%s", (company_id, status))
+    elif company_id:
+        c.execute("SELECT * FROM drivers WHERE company_id=%s", (company_id,))
+    elif status:
         c.execute("SELECT * FROM drivers WHERE status=%s", (status,))
     else:
         c.execute("SELECT * FROM drivers")
@@ -347,10 +353,18 @@ async def update_driver(driver_id: int, driver: Driver):
 # ── LOADS ──────────────────────────────────────────────────────────────────
 
 @app.get("/api/loads")
-async def get_loads(status: Optional[str] = None):
+async def get_loads(status: Optional[str] = None, company_id: Optional[int] = None):
     conn = get_db()
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    if status:
+    if company_id and status:
+        c.execute("""SELECT l.*,d.username as driver_username,d.full_name as driver_name
+                     FROM loads l LEFT JOIN drivers d ON l.assigned_driver_id=d.id
+                     WHERE l.company_id=%s AND l.status=%s ORDER BY l.pickup_date""", (company_id, status))
+    elif company_id:
+        c.execute("""SELECT l.*,d.username as driver_username,d.full_name as driver_name
+                     FROM loads l LEFT JOIN drivers d ON l.assigned_driver_id=d.id
+                     WHERE l.company_id=%s ORDER BY l.pickup_date""", (company_id,))
+    elif status:
         c.execute("""SELECT l.*,d.username as driver_username,d.full_name as driver_name
                      FROM loads l LEFT JOIN drivers d ON l.assigned_driver_id=d.id
                      WHERE l.status=%s ORDER BY l.pickup_date""", (status,))
