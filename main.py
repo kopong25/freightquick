@@ -781,6 +781,10 @@ async def get_plans():
             {"name":"Fleet","drivers":50,"price":1450,"per_driver":29,"description":"Up to 50 drivers"},
         ]
     }
+@app.get("/api/debug/stripe")
+async def debug_stripe():
+    key = os.environ.get("STRIPE_SECRET_KEY")
+    return {"key_exists": key is not None, "key_prefix": key[:10] if key else None}
 
 if __name__ == "__main__":
     import uvicorn
