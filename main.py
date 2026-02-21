@@ -742,10 +742,10 @@ class CreateCheckout(BaseModel):
 
 @app.post("/api/stripe/create-checkout")
 async def create_checkout(data: CreateCheckout):
-    if not stripe.api_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
     try:
-        session = stripe.checkout.Session.create(
+        import stripe as stripe_lib
+        stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY")
+        session = stripe_lib.checkout.Session.create(
             payment_method_types=["card"],
             mode="subscription",
             customer_email=data.email,
