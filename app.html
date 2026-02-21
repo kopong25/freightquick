@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --black: #080C0A; --bg: #0D1210; --bg2: #141A16; --bg3: #1C2420;
@@ -788,6 +789,97 @@ function TruckPayView({drivers}) {
     if(s) setSummary(s);
   }
 
+  function exportPDF(r) {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF();
+    const orange = [255,107,53];
+    const dark = [13,18,16];
+
+    // Header
+    doc.setFillColor(...orange);
+    doc.rect(0,0,210,28,"F");
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(20);
+    doc.setFont("helvetica","bold");
+    doc.text("FreightQuick",14,12);
+    doc.setFontSize(10);
+    doc.setFont("helvetica","normal");
+    doc.text("Driver Settlement Sheet",14,20);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`,140,20);
+
+    // Driver Info Box
+    doc.setFillColor(240,245,242);
+    doc.rect(14,34,182,30,"F");
+    doc.setTextColor(...dark);
+    doc.setFontSize(11);
+    doc.setFont("helvetica","bold");
+    doc.text("DRIVER INFORMATION",18,44);
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(10);
+    doc.text(`Name: ${r.full_name}`,18,52);
+    doc.text(`Username: ${r.username}`,18,58);
+    doc.text(`Week Ending: ${r.week_ending}`,110,52);
+    doc.text(`Driver Type: ${r.driver_type}`,110,58);
+
+    // Pay Summary
+    doc.setFontSize(12);
+    doc.setFont("helvetica","bold");
+    doc.setTextColor(...orange);
+    doc.text("PAY SUMMARY",14,78);
+
+    const rows = [
+      ["Gross Pay", `$${r.gross_pay?.toLocaleString()}`],
+      ["Fuel Deduction", `-$${r.fuel_deduction?.toLocaleString()}`],
+      ["Insurance Deduction", `-$${r.insurance_deduction?.toLocaleString()}`],
+      ["Advance Deduction", `-$${r.advance_deduction?.toLocaleString()}`],
+      ["Other Deduction", `-$${r.other_deduction?.toLocaleString()}`],
+    ];
+
+    let y = 86;
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(10);
+    rows.forEach(([label,value],i)=>{
+      doc.setFillColor(i%2===0?248:255,i%2===0?248:255,i%2===0?248:255);
+      doc.rect(14,y-5,182,10,"F");
+      doc.setTextColor(...dark);
+      doc.text(label,18,y);
+      doc.text(value,170,y,"right");
+      y+=12;
+    });
+
+    // Net Pay
+    doc.setFillColor(...orange);
+    doc.rect(14,y-2,182,14,"F");
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(13);
+    doc.setFont("helvetica","bold");
+    doc.text("NET PAY",18,y+7);
+    doc.text(`$${r.net_pay?.toLocaleString()}`,192,y+7,"right");
+    y+=22;
+
+    // Notes
+    if(r.notes) {
+      doc.setTextColor(...dark);
+      doc.setFontSize(10);
+      doc.setFont("helvetica","bold");
+      doc.text("NOTES:",14,y+6);
+      doc.setFont("helvetica","normal");
+      doc.text(r.notes,14,y+14);
+      y+=20;
+    }
+
+    // Footer
+    doc.setFillColor(220,225,222);
+    doc.rect(0,275,210,22,"F");
+    doc.setTextColor(100,120,110);
+    doc.setFontSize(8);
+    doc.setFont("helvetica","normal");
+    doc.text("FreightQuick — Fleet Management Platform",14,283);
+    doc.text("freightquick-ap.onrender.com",14,289);
+    doc.text(`Settlement ID: FQ-${r.id}-${r.week_ending}`,140,283);
+
+    doc.save(`Settlement_${r.username}_${r.week_ending}.pdf`);
+  }
   async function saveRecord(e) {
     e.preventDefault();
     await apiFetch("/pay", {method:"POST", body:JSON.stringify({
@@ -868,7 +960,7 @@ function TruckPayView({drivers}) {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr style={{borderBottom:"1px solid var(--border)"}}>
-              {["Driver","Week Ending","Gross Pay","Deductions","Net Pay","Notes"].map(h=>(
+                {["Driver","Week Ending","Gross Pay","Deductions","Net Pay","Notes",""].map(h=>(
                 <th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1,textTransform:"uppercase"}}>{h}</th>
               ))}
             </tr>
@@ -886,7 +978,8 @@ function TruckPayView({drivers}) {
                 <td style={{padding:"12px 16px",fontFamily:"var(--mono)",fontSize:13,color:"var(--white)"}}>${r.gross_pay?.toLocaleString()}</td>
                 <td style={{padding:"12px 16px",fontFamily:"var(--mono)",fontSize:13,color:"var(--red)"}}>-${r.total_deductions?.toLocaleString()}</td>
                 <td style={{padding:"12px 16px",fontFamily:"var(--mono)",fontSize:13,fontWeight:700,color:"var(--green)"}}>${r.net_pay?.toLocaleString()}</td>
-                <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)"}}>{r.notes||"—"}</td>
+               <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)"}}>{r.notes||"—"}</td>
+                <td style={{padding:"12px 16px"}}><button className="btn btn-ghost btn-sm" onClick={()=>exportPDF(r)}>⬇ PDF</button></td>
               </tr>
             ))}
           </tbody>
