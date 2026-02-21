@@ -10,7 +10,8 @@ import os
 import hashlib
 import secrets
 import stripe
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY")
+stripe.api_key = STRIPE_KEY
 
 app = FastAPI(title="FreightQuick API", version="1.0.0")
 
@@ -294,6 +295,9 @@ def init_db():
         for l in loads:
             c.execute("""INSERT INTO loads (load_number,origin,destination,pickup_date,delivery_date,weight,miles,rate,status,load_type,commodity)
                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", l)
+    # Add company_id columns if they don't exist
+    c.execute("ALTER TABLE drivers ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1")
+    c.execute("ALTER TABLE loads ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1")
 
     conn.commit()
     conn.close()
@@ -738,6 +742,8 @@ class CreateCheckout(BaseModel):
 
 @app.post("/api/stripe/create-checkout")
 async def create_checkout(data: CreateCheckout):
+    if not stripe.api_key:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
