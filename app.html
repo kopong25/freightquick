@@ -1319,6 +1319,10 @@ function InspectionView({drivers}) {
   const [checklistState, setChecklistState] = useState({});
   const [notes, setNotes] = useState({});
   const [photos, setPhotos] = useState({});
+  const [cameraItem, setCameraItem] = useState(null);
+  const [stream, setStream] = useState(null);
+  const videoRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
   const [inspections, setInspections] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [subview, setSubview] = useState("dashboard");
@@ -1350,7 +1354,35 @@ function InspectionView({drivers}) {
     },1500);
   }
 
-  function resetForm() { setDriver(null);setVehicle(null);setChecklistState({});setNotes({});setPhotos({});setStep(1);setSubview("dashboard"); }
+   function resetForm() { setDriver(null);setVehicle(null);setChecklistState({});setNotes({});setPhotos({});setStep(1);setSubview("dashboard");closeCamera(); }
+
+  async function openCamera(itemId) {
+    setCameraItem(itemId);
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+      setStream(s);
+      setTimeout(()=>{ if(videoRef.current) videoRef.current.srcObject=s; },100);
+    } catch(e) {
+      alert("Camera not available. Please allow camera access.");
+      setCameraItem(null);
+    }
+  }
+
+  function closeCamera() {
+    if(stream) { stream.getTracks().forEach(t=>t.stop()); setStream(null); }
+    setCameraItem(null);
+  }
+
+  function capturePhoto() {
+    if(!videoRef.current||!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext("2d").drawImage(videoRef.current,0,0);
+    const dataUrl = canvas.toDataURL("image/jpeg",0.8);
+    setPhotos(p=>({...p,[cameraItem]:dataUrl}));
+    closeCamera();
+  }
 
   const unread = alerts.filter(a=>!a.read).length;
 
@@ -1371,7 +1403,19 @@ function InspectionView({drivers}) {
           ))}
         </div>
       </div>
-
+       
+            {/* CAMERA MODAL */}
+      {cameraItem&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.95)",zIndex:1000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase"}}>Camera — {CHECKLIST_ITEMS.find(i=>i.id===cameraItem)?.label}</div>
+          <video ref={videoRef} autoPlay playsInline style={{width:"100%",maxWidth:480,borderRadius:12,border:"2px solid var(--green)"}}/>
+          <canvas ref={canvasRef} style={{display:"none"}}/>
+          <div style={{display:"flex",gap:12}}>
+            <button className="btn btn-green" onClick={capturePhoto} style={{padding:"12px 32px",fontSize:14}}>📷 Capture</button>
+            <button className="btn btn-ghost" onClick={closeCamera}>Cancel</button>
+          </div>
+        </div>
+      )}
       {/* DASHBOARD */}
       {subview==="dashboard"&&(
         <div>
@@ -1475,6 +1519,7 @@ function InspectionView({drivers}) {
                     <div style={{display:"flex",gap:8}}>
                       <button className="btn btn-sm" onClick={()=>toggleCheck(item.id,"ok")} style={{background:checklistState[item.id]==="ok"?"rgba(0,200,0,0.2)":"transparent",color:checklistState[item.id]==="ok"?"#4ADE80":"var(--gray)",border:`1px solid ${checklistState[item.id]==="ok"?"#16a34a":"var(--border)"}`}}>✓ OK</button>
                       <button className="btn btn-sm" onClick={()=>toggleCheck(item.id,"damaged")} style={{background:checklistState[item.id]==="damaged"?"rgba(200,0,0,0.2)":"transparent",color:checklistState[item.id]==="damaged"?"var(--red)":"var(--gray)",border:`1px solid ${checklistState[item.id]==="damaged"?"var(--red)":"var(--border)"}`}}>✗ DAMAGED</button>
+                      <button className="btn btn-sm" onClick={()=>openCamera(item.id)} style={{background:photos[item.id]?"rgba(255,107,53,0.1)":"transparent",color:photos[item.id]?"var(--green)":"var(--gray)",border:`1px solid ${photos[item.id]?"var(--green)":"var(--border)"}`}}>{photos[item.id]?"📷 1 Photo":"📷 Add Photo"}</button>
                     </div>
                   </div>
                   {checklistState[item.id]==="damaged"&&(
