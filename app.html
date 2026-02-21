@@ -142,8 +142,10 @@ const NAV = [
   {id:"truckpay",icon:"💰",label:"TruckPay"},
    {id:"insurance",icon:"🛡️",label:"Insurance"},
  {id:"companies",icon:"🏢",label:"Companies"},
-  {id:"inspection",icon:"🚚",label:"Inspection"},
+   {id:"inspection",icon:"🚚",label:"Inspection"},
+  {id:"billing",icon:"💳",label:"Billing"},
 ];
+
 
 function Sidebar({active,setActive}) {
   return (
@@ -1714,6 +1716,107 @@ function InspectionView({drivers}) {
     </div>
   );
 }
+
+// ── BILLING VIEW ───────────────────────────────────────────────────────────
+function BillingView() {
+  const [plans] = useState([
+    {name:"Starter",drivers:5,price:145,per_driver:29,description:"Up to 5 drivers"},
+    {name:"Growth",drivers:15,price:435,per_driver:29,description:"Up to 15 drivers"},
+    {name:"Fleet",drivers:50,price:1450,per_driver:29,description:"Up to 50 drivers"},
+  ]);
+  const [loading, setLoading] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  async function subscribe(plan) {
+    setLoading(plan.name);
+    try {
+      const res = await apiFetch("/stripe/create-checkout", {
+        method:"POST",
+        body:JSON.stringify({
+          company_id: fqUser?.company_id,
+          company_name: fqUser?.company_name,
+          email: fqUser?.email,
+          driver_count: plan.drivers
+        })
+      });
+      if(res?.checkout_url) {
+        window.location.href = res.checkout_url;
+      } else {
+        setToast("❌ Error creating checkout. Please try again.");
+        setTimeout(()=>setToast(null), 3000);
+      }
+    } catch(e) {
+      setToast("❌ Connection error. Please try again.");
+      setTimeout(()=>setToast(null), 3000);
+    }
+    setLoading(null);
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const paymentStatus = urlParams.get("payment");
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24}}>
+      {toast && <div style={{background:"var(--red)",color:"#fff",padding:"10px 20px",fontFamily:"var(--mono)",fontSize:12,fontWeight:600,textAlign:"center",marginBottom:16,borderRadius:8}}>{toast}</div>}
+
+      {paymentStatus==="success" && (
+        <div style={{background:"rgba(0,200,0,0.1)",border:"1px solid rgba(0,200,0,0.3)",borderRadius:12,padding:20,marginBottom:24,textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:8}}>🎉</div>
+          <div style={{fontFamily:"var(--display)",fontSize:18,fontWeight:700,marginBottom:4}}>Payment Successful!</div>
+          <div style={{fontSize:13,color:"var(--gray)"}}>Your subscription is now active. Welcome to FreightQuick!</div>
+        </div>
+      )}
+
+      {paymentStatus==="cancelled" && (
+        <div style={{background:"rgba(255,92,92,0.1)",border:"1px solid rgba(255,92,92,0.3)",borderRadius:12,padding:20,marginBottom:24,textAlign:"center"}}>
+          <div style={{fontSize:13,color:"var(--gray)"}}>Payment cancelled. Choose a plan below to get started.</div>
+        </div>
+      )}
+
+      <div style={{marginBottom:24}}>
+        <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Subscription</div>
+        <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Choose Your Plan</div>
+        <div style={{fontSize:13,color:"var(--gray)",marginTop:6}}>$29 per driver per month. Cancel anytime.</div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,marginBottom:32}}>
+        {plans.map(plan=>(
+          <div key={plan.name} style={{background:"var(--bg2)",border:`1px solid ${plan.name==="Growth"?"var(--green)":"var(--border)"}`,borderRadius:16,padding:24,position:"relative",display:"flex",flexDirection:"column"}}>
+            {plan.name==="Growth" && (
+              <div style={{position:"absolute",top:-12,left:"50%",transform:"translateX(-50%)",background:"var(--green)",color:"#000",padding:"4px 16px",borderRadius:20,fontSize:10,fontWeight:700,fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>MOST POPULAR</div>
+            )}
+            <div style={{fontFamily:"var(--display)",fontSize:18,fontWeight:800,marginBottom:4}}>{plan.name}</div>
+            <div style={{fontSize:12,color:"var(--gray)",marginBottom:16}}>{plan.description}</div>
+            <div style={{marginBottom:16}}>
+              <span style={{fontFamily:"var(--display)",fontSize:36,fontWeight:800,color:"var(--green)"}}>${plan.price}</span>
+              <span style={{fontSize:12,color:"var(--gray)"}}>/month</span>
+            </div>
+            <div style={{fontSize:12,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:20}}>${plan.per_driver}/driver × {plan.drivers} drivers</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24,flex:1}}>
+              {["Full dispatch management","DOT compliance tracking","Driver settlements & PDF","Fleet insurance tracking","Vehicle inspections","Email support"].map(f=>(
+                <div key={f} style={{display:"flex",alignItems:"center",gap:8,fontSize:12}}>
+                  <span style={{color:"var(--green)"}}>✓</span>{f}
+                </div>
+              ))}
+            </div>
+            <button className="btn btn-green" style={{width:"100%",justifyContent:"center",padding:"12px",fontSize:13}} onClick={()=>subscribe(plan)} disabled={loading===plan.name}>
+              {loading===plan.name?"Processing...":"Subscribe Now"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+        <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1,marginBottom:12}}>ACCOUNT INFO</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+          <div><div style={{fontSize:11,color:"var(--gray)",marginBottom:4}}>COMPANY</div><div style={{fontSize:13,fontWeight:600}}>{fqUser?.company_name}</div></div>
+          <div><div style={{fontSize:11,color:"var(--gray)",marginBottom:4}}>EMAIL</div><div style={{fontSize:13}}>{fqUser?.email}</div></div>
+          <div><div style={{fontSize:11,color:"var(--gray)",marginBottom:4}}>PLAN</div><div style={{fontSize:13,fontWeight:600,color:"var(--green)"}}>Test Mode</div></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 // ── COMPANIES VIEW (SUPERADMIN) ────────────────────────────────────────────
 function CompaniesView() {
   const [companies, setCompanies] = useState([]);
@@ -1824,6 +1927,7 @@ function App() {
         {view==="insurance"&&<InsuranceView/>}
         {view==="companies"&&<CompaniesView/>}
         {view==="inspection"&&<InspectionView drivers={drivers}/>}
+        {view==="billing"&&<BillingView/>}
         {view==="maintenance"&&<MaintenanceView/>}
         {view==="fuel"&&<FuelManagerView drivers={drivers}/>}
       </div>
