@@ -9,6 +9,8 @@ import random
 import os
 import hashlib
 import secrets
+import stripe
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 
 app = FastAPI(title="FreightQuick API", version="1.0.0")
 
@@ -726,6 +728,53 @@ async def get_all_companies():
     companies = [dict(r) for r in c.fetchall()]
     conn.close()
     return companies
+# ── STRIPE PAYMENTS ────────────────────────────────────────────────────────
+
+class CreateCheckout(BaseModel):
+    company_id: int
+    company_name: str
+    email: str
+    driver_count: int
+
+@app.post("/api/stripe/create-checkout")
+async def create_checkout(data: CreateCheckout):
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            mode="subscription",
+            customer_email=data.email,
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "unit_amount": 2900,
+                    "recurring": {"interval": "month"},
+                    "product_data": {
+                        "name": "FreightQuick — Driver Subscription",
+                        "description": f"Fleet management for {data.company_name}",
+                    },
+                },
+                "quantity": data.driver_count,
+            }],
+            metadata={
+                "company_id": str(data.company_id),
+                "company_name": data.company_name,
+            },
+            success_url="https://freightquick-ap.onrender.com/app.html?payment=success",
+            cancel_url="https://freightquick-ap.onrender.com/app.html?payment=cancelled",
+        )
+        return {"checkout_url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/stripe/plans")
+async def get_plans():
+    return {
+        "plans": [
+            {"name":"Starter","drivers":5,"price":145,"per_driver":29,"description":"Up to 5 drivers"},
+            {"name":"Growth","drivers":15,"price":435,"per_driver":29,"description":"Up to 15 drivers"},
+            {"name":"Fleet","drivers":50,"price":1450,"per_driver":29,"description":"Up to 50 drivers"},
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn
