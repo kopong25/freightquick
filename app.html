@@ -1903,17 +1903,32 @@ function App() {
   const [loads,setLoads] = useState(MOCK.loads);
   const [analytics,setAnalytics] = useState(MOCK.analytics);
 
-  const refresh = useCallback(async()=>{
+   const refresh = useCallback(async()=>{
     const [d,l,a] = await Promise.all([apiFetch("/drivers"),apiFetch("/loads"),apiFetch("/analytics")]);
     if(d) setDrivers(d);
     if(l) setLoads(l);
     if(a) setAnalytics(a);
+    const trial = await apiFetch(`/trial/status/${fqUser?.company_id}`);
+    if(trial) setTrialStatus(trial);
   },[]);
 
   useEffect(()=>{ refresh(); },[]);
-
+  const [trialStatus, setTrialStatus] = useState(null);
   return (
-    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden"}}>
+      {trialStatus?.status==="trial"&&(
+        <div style={{background:"rgba(255,107,53,0.15)",borderBottom:"1px solid rgba(255,107,53,0.3)",padding:"8px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{fontSize:12,color:"var(--green)",fontFamily:"var(--mono)"}}>⚡ FREE TRIAL — {trialStatus.days_left} days remaining. No credit card needed.</div>
+          <button className="btn btn-green btn-sm" onClick={()=>setView("billing")}>Subscribe Now</button>
+        </div>
+      )}
+      {trialStatus?.status==="expired"&&(
+        <div style={{background:"rgba(255,92,92,0.15)",borderBottom:"1px solid rgba(255,92,92,0.3)",padding:"8px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{fontSize:12,color:"var(--red)",fontFamily:"var(--mono)"}}>⚠ TRIAL EXPIRED — Subscribe to continue using FreightQuick</div>
+          <button className="btn btn-green btn-sm" onClick={()=>setView("billing")}>Subscribe Now</button>
+        </div>
+      )}
+      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
       <Sidebar active={view} setActive={setView}/>
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <TopBar view={view}/>
@@ -1930,7 +1945,8 @@ function App() {
         {view==="billing"&&<BillingView/>}
         {view==="maintenance"&&<MaintenanceView/>}
         {view==="fuel"&&<FuelManagerView drivers={drivers}/>}
-      </div>
+    </div>
+    </div>
     </div>
   );
 }
