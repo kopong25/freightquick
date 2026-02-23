@@ -413,6 +413,27 @@ function LoadsView({loads,onRefresh}) {
   const [filter,setFilter]=useState("all");
   const [search,setSearch]=useState("");
   const [showAdd,setShowAdd]=useState(false);
+  const [showInvite,setShowInvite]=useState(false);
+  const [inviteForm,setInviteForm]=useState({full_name:"",email:""});
+  const [inviteResult,setInviteResult]=useState(null);
+  const [inviteLoading,setInviteLoading]=useState(false);
+
+  async function inviteDriver(e){
+    e.preventDefault();
+    setInviteLoading(true);
+    const res = await apiFetch("/auth/invite",{method:"POST",body:JSON.stringify({
+      full_name:inviteForm.full_name,
+      email:inviteForm.email,
+      company_id:fqUser?.company_id
+    })});
+    setInviteLoading(false);
+    if(res?.invite_token){
+      const link = `${window.location.origin}/auth.html?token=${res.invite_token}&email=${encodeURIComponent(inviteForm.email)}`;
+      setInviteResult(link);
+    } else {
+      setInviteResult("error");
+    }
+  }
   const [form,setForm]=useState({load_number:"",origin:"",destination:"",pickup_date:"",delivery_date:"",weight:"",miles:"",rate:"",load_type:"OTR",commodity:""});
 
   const filtered = loads.filter(l=>{
@@ -437,7 +458,44 @@ function LoadsView({loads,onRefresh}) {
         </div>
         <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Load</button>
       </div>
-
+ {showInvite&&(
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:4}}>Invite Driver</div>
+          <div style={{fontSize:12,color:"var(--gray)",marginBottom:16}}>Driver will receive a link to set their password and join your company.</div>
+          {!inviteResult?(
+            <form onSubmit={inviteDriver}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                <div>
+                  <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>FULL NAME</div>
+                  <input value={inviteForm.full_name} onChange={e=>setInviteForm(p=>({...p,full_name:e.target.value}))} placeholder="John Smith" style={{width:"100%"}} required/>
+                </div>
+                <div>
+                  <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>EMAIL</div>
+                  <input type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))} placeholder="driver@email.com" style={{width:"100%"}} required/>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button className="btn btn-green" type="submit" disabled={inviteLoading}>{inviteLoading?"Sending...":"Send Invite"}</button>
+                <button className="btn btn-ghost" type="button" onClick={()=>{setShowInvite(false);setInviteResult(null);setInviteForm({full_name:"",email:""});}}>Cancel</button>
+              </div>
+            </form>
+          ):(
+            inviteResult==="error"?(
+              <div style={{color:"var(--red)",fontSize:13}}>❌ Error — email may already be registered.</div>
+            ):(
+              <div>
+                <div style={{color:"var(--green)",fontSize:13,marginBottom:12}}>✅ Invite created! Share this link with the driver:</div>
+                <div style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:8,padding:12,fontFamily:"var(--mono)",fontSize:11,wordBreak:"break-all",marginBottom:12}}>{inviteResult}</div>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="btn btn-green" onClick={()=>navigator.clipboard.writeText(inviteResult)}>📋 Copy Link</button>
+                  <button className="btn btn-ghost" onClick={()=>{setInviteResult(null);setInviteForm({full_name:"",email:""});}}>Invite Another</button>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+      
       {showAdd&&(
         <form onSubmit={addLoad} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
           <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:16}}>New Load</div>
@@ -527,7 +585,10 @@ function DriversView({drivers,onRefresh}) {
           <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Driver Management</div>
           <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>All Drivers</div>
         </div>
-        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Driver</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-ghost" onClick={()=>setShowInvite(!showInvite)}>✉ Invite Driver</button>
+          <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Driver</button>
+        </div>
       </div>
 
       {showAdd&&(

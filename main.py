@@ -771,6 +771,32 @@ async def invite_driver(data: InviteDriver):
     except:
         conn.close()
         raise HTTPException(status_code=400,detail="Email already exists")
+    
+    class AcceptInvite(BaseModel):
+    token: str
+    email: str
+    full_name: str
+    password: str
+
+@app.post("/api/auth/accept-invite")
+async def accept_invite(data: AcceptInvite):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT * FROM users WHERE invite_token=%s AND email=%s", (data.token, data.email))
+    user = c.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid or expired invite link")
+    user = dict(user)
+    c.execute("UPDATE users SET password_hash=%s, full_name=%s, is_active=1, invite_token=NULL WHERE id=%s",
+              (hash_password(data.password), data.full_name, user["id"]))
+    c.execute("SELECT co.company_name FROM companies co WHERE co.id=%s", (user["company_id"],))
+    company = c.fetchone()
+    conn.commit()
+    conn.close()
+    return {"user_id": user["id"], "company_id": user["company_id"], "full_name": data.full_name,
+            "email": data.email, "role": user["role"], "company_name": company["company_name"]}
+
 
 @app.post("/api/auth/make-superadmin")
 async def make_superadmin(data: dict):

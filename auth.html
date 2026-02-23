@@ -50,7 +50,7 @@
 
     <div id="error-msg" class="error" style="display:none"></div>
     <div id="success-msg" class="success" style="display:none"></div>
-
+ 
     <!-- LOGIN FORM -->
     <div id="form-login">
       <div class="field">
@@ -92,9 +92,72 @@
     </div>
   </div>
 </div>
-
+</div>
+  </div>
+  <!-- Invite Accept Form -->
+  <div id="invite-form" style="display:none">
+    <h2 style="margin-bottom:8px">Set Your Password</h2>
+    <p style="color:#9CA3AF;font-size:13px;margin-bottom:24px">You've been invited to join FreightQuick. Set your password to get started.</p>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="invite-email" readonly style="opacity:0.6"/>
+    </div>
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="invite-name" placeholder="Your full name"/>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="invite-password" placeholder="Create a password"/>
+    </div>
+    <button class="btn-primary" onclick="acceptInvite()">Activate Account →</button>
+    <div id="invite-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
 <script>
 const API = "https://freightquick-app.onrender.com/api";
+
+async function acceptInvite() {
+  const email = document.getElementById("invite-email").value;
+  const full_name = document.getElementById("invite-name").value;
+  const password = document.getElementById("invite-password").value;
+  const msg = document.getElementById("invite-msg");
+  
+  try {
+    const res = await fetch(API + "/auth/accept-invite", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({token: inviteToken, email, full_name, password})
+    });
+    const data = await res.json();
+    if(data.user_id) {
+      msg.style.color = "#4ADE80";
+      msg.textContent = "✅ Account activated! Redirecting...";
+      localStorage.setItem("fq_user", JSON.stringify(data));
+      setTimeout(()=>window.location.href="app.html", 1500);
+    } else {
+      msg.style.color = "#F87171";
+      msg.textContent = "❌ " + (data.detail || "Error activating account");
+    }
+  } catch(e) {
+    msg.style.color = "#F87171";
+    msg.textContent = "❌ Connection error";
+  }
+}
+
+// Handle invite token
+const urlParams = new URLSearchParams(window.location.search);
+const inviteToken = urlParams.get("token");
+const inviteEmail = urlParams.get("email");
+
+if(inviteToken && inviteEmail) {
+  // Show set password form
+  document.querySelector(".tabs").style.display = "none";
+  document.getElementById("signin-form").style.display = "none";
+  document.getElementById("signup-form").style.display = "none";
+  document.getElementById("invite-form").style.display = "block";
+  document.getElementById("invite-email").value = inviteEmail;
+}
 
 function showTab(tab) {
   document.getElementById('form-login').style.display = tab==='login' ? 'block' : 'none';
