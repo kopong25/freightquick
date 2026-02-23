@@ -5,6 +5,7 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
+import requests as http_requests
 import random
 import os
 import hashlib
@@ -487,20 +488,79 @@ async def get_routes():
     conn.close()
     return [dict(r) for r in routes]
 
+ORS_API_KEY = os.environ.get("ORS_API_KEY")
+
+def geocode_city(city: str):
+    try:
+        url = "https://api.openrouteservice.org/geocode/search"
+        params = {"api_key": ORS_API_KEY, "text": city, "size": 1}
+        r = http_requests.get(url, params=params, timeout=10)
+        data = r.json()
+        coords = data["features"][0]["geometry"]["coordinates"]
+        return coords
+    except:
+        return None
+
+def get_real_route(origin: str, destination: str):
+    try:
+        origin_coords = geocode_city(origin)
+        dest_coords = geocode_city(destination)
+        if not origin_coords or not dest_coords:
+            return None
+        url = "https://api.openrouteservice.org/v2/directions/driving-hgv"
+        headers = {"Authorization": ORS_API_KEY, "Content-Type": "application/json"}
+        body = {"coordinates": [origin_coords, dest_coords], "units": "mi"}
+        r = http_requests.post(url, json=body, headers=headers, timeout=15)
+        data = r.json()
+        route = data["routes"][0]
+        miles = round(route["summary"]["distance"], 1)
+        hours = round(route["summary"]["duration"] / 3600, 1)
+        return {"miles": miles, "hours": hours}
+    except:
+        return None
+
 @app.post("/api/routes/optimize")
 async def optimize_route(request: OptimizeRequest):
     conn = get_db()
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT * FROM routes WHERE assignment_id=%s",(request.assignment_id,))
+    c.execute("""SELECT r.*,l.origin,l.destination FROM routes r
+                 JOIN assignments a ON r.assignment_id=a.id
+                 JOIN loads l ON a.load_id=l.id
+                 WHERE r.assignment_id=%s""", (request.assignment_id,))
     route = dict(c.fetchone())
-    savings_pct = random.uniform(0.03,0.08)
-    new_miles = round(route["total_miles"]*(1-savings_pct),1)
-    new_fuel = round(new_miles*0.43,2)
-    c.execute("UPDATE routes SET total_miles=%s,estimated_hours=%s,fuel_cost=%s WHERE assignment_id=%s",
-              (new_miles,round(new_miles/55,1),new_fuel,request.assignment_id))
-    conn.commit()
-    conn.close()
-    return {"optimized":True,"savings_miles":round(route["total_miles"]-new_miles,1),"new_total":new_miles}
+    real = get_real_route(route["origin"], route["destination"])
+    if real:
+        new_miles = real["miles"]
+        new_hours = real["hours"]
+        new_fuel = round(new_miles * 0.43, 2)
+        c.execute("UPDATE routes SET total_miles=%s,estimated_hours=%s,fuel_cost=%s WHERE assignment_id=%s",
+                  (new_miles, new_hours, new_fuel, request.assignment_id))
+        conn.commit()
+        conn.close()
+        return {"optimized": True, "real_route": True, "total_miles": new_miles,
+                "estimated_hours": new_hours, "fuel_cost": new_fuel,
+                "savings_miles": round(route["total_miles"] - new_miles, 1)}
+    else:
+        savings_pct = random.uniform(0.03, 0.08)
+        new_miles = round(route["total_miles"] * (1 - savings_pct), 1)
+        new_fuel = round(new_miles * 0.43, 2)
+        c.execute("UPDATE routes SET total_miles=%s,estimated_hours=%s,fuel_cost=%s WHERE assignment_id=%s",
+                  (new_miles, round(new_miles/55, 1), new_fuel, request.assignment_id))
+        conn.commit()
+        conn.close()
+        return {"optimized": True, "real_route": False, "total_miles": new_miles,
+                "savings_miles": round(route["total_miles"] - new_miles, 1)}
+
+@app.get("/api/routes/distance")
+async def get_distance(origin: str, destination: str):
+    real = get_real_route(origin, destination)
+    if real:
+        return {"origin": origin, "destination": destination,
+                "miles": real["miles"], "hours": real["hours"],
+                "fuel_cost": round(real["miles"] * 0.43, 2), "real": True}
+    return {"origin": origin, "destination": destination,
+            "miles": None, "real": False, "error": "Could not calculate route"}
+
 
 # ── ANALYTICS ──────────────────────────────────────────────────────────────
 
