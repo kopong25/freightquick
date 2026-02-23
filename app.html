@@ -50,6 +50,41 @@
   input:focus, select:focus { border-color: var(--green); }
   input::placeholder { color: var(--gray2); }
   select option { background: var(--bg3); }
+/* ── MOBILE RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none !important;
+  }
+  .mobile-nav {
+    display: flex !important;
+  }
+  .top-bar {
+    padding: 0 12px !important;
+  }
+  .main-content {
+    padding: 12px !important;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .dispatch-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (min-width: 769px) {
+  .mobile-nav {
+    display: none !important;
+  }
+}
+</style>
+</head>
+<body>
+  
 </style>
 </head>
 <body>
@@ -149,7 +184,7 @@ const NAV = [
 
 function Sidebar({active,setActive}) {
   return (
-    <div style={{width:220,background:"var(--bg)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column",flexShrink:0}}>
+    <div className="sidebar" style={{width:220,background:"var(--bg)",,borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column",flexShrink:0}}>
       <div style={{padding:"20px 20px 16px",borderBottom:"1px solid var(--border)"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:30,height:30,background:"linear-gradient(135deg, var(--green), #FF8B5A)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"var(--white)"}}>
@@ -1894,6 +1929,51 @@ function CompaniesView() {
     </div>
   );
 }
+
+// ── MOBILE NAV ─────────────────────────────────────────────────────────────
+function MobileNav({active, setActive}) {
+  const topNav = NAV.slice(0, 5);
+  return (
+    <div className="mobile-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"var(--bg2)",borderTop:"1px solid var(--border)",zIndex:100,padding:"6px 0",paddingBottom:"env(safe-area-inset-bottom)"}}>
+      <div style={{display:"flex",justifyContent:"space-around",alignItems:"center"}}>
+        {topNav.map(item=>(
+          <button key={item.id} onClick={()=>setActive(item.id)}
+            style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",color:active===item.id?"var(--green)":"var(--gray)",minWidth:50}}>
+            <span style={{fontSize:20}}>{item.icon}</span>
+            <span style={{fontSize:9,fontFamily:"var(--mono)",letterSpacing:0.5}}>{item.label}</span>
+          </button>
+        ))}
+        <button onClick={()=>setActive("more")}
+          style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",color:active==="more"?"var(--green)":"var(--gray)",minWidth:50}}>
+          <span style={{fontSize:20}}>☰</span>
+          <span style={{fontSize:9,fontFamily:"var(--mono)",letterSpacing:0.5}}>More</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── MOBILE MORE MENU ───────────────────────────────────────────────────────
+function MobileMoreMenu({active, setActive}) {
+  const moreNav = NAV.slice(5);
+  return (
+    <div style={{padding:16,paddingBottom:80}}>
+      <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:2,marginBottom:16}}>MORE MODULES</div>
+      {moreNav.map(item=>(
+        <div key={item.id} onClick={()=>setActive(item.id)}
+          style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",marginBottom:8,borderRadius:10,cursor:"pointer",background:active===item.id?"var(--green-glow)":"var(--bg2)",border:`1px solid ${active===item.id?"rgba(255,107,53,0.3)":"var(--border)"}`}}>
+          <span style={{fontSize:24}}>{item.icon}</span>
+          <span style={{fontSize:14,fontWeight:600}}>{item.label}</span>
+        </div>
+      ))}
+      <div style={{marginTop:20,padding:"14px 16px",borderRadius:10,background:"var(--bg2)",border:"1px solid var(--border)"}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{fqUser?.full_name}</div>
+        <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginBottom:12}}>{fqUser?.role} · {fqUser?.company_name}</div>
+        <button className="btn btn-ghost btn-sm" style={{width:"100%",justifyContent:"center"}} onClick={()=>{localStorage.removeItem("fq_user");window.location.href="auth.html";}}>Logout</button>
+      </div>
+    </div>
+  );
+}
 // ── TOP BAR ────────────────────────────────────────────────────────────────
 function TopBar({view}) {
   const labels = {analytics:"Analytics Overview",dispatch:"Dispatch Management",loads:"Load Management",drivers:"Driver Management",routes:"Route Optimization"};
@@ -1950,6 +2030,8 @@ function App() {
       <Sidebar active={view} setActive={setView}/>
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <TopBar view={view}/>
+        <MobileNav active={view} setActive={setView}/>
+        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {view==="analytics"&&<AnalyticsView data={analytics}/>}
         {view==="dispatch"&&<DispatchView drivers={drivers} loads={loads} onAssign={refresh}/>}
         {view==="loads"&&<LoadsView loads={loads} onRefresh={refresh}/>}
@@ -1963,12 +2045,13 @@ function App() {
         {view==="billing"&&<BillingView/>}
         {view==="maintenance"&&<MaintenanceView/>}
         {view==="fuel"&&<FuelManagerView drivers={drivers}/>}
-    </div>
+       {view==="more"&&<MobileMoreMenu active={view} setActive={setView}/>}
+        </div>
+      </div>
     </div>
     </div>
   );
 }
-
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
