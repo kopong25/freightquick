@@ -267,6 +267,20 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS inspections (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER,
+            driver_id INTEGER,
+            driver_name TEXT,
+            vehicle TEXT,
+            status TEXT DEFAULT 'clear',
+            damage_items TEXT,
+            gps_location TEXT,
+            notes TEXT,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
     # Seed drivers if empty
     c.execute("SELECT COUNT(*) FROM drivers")
@@ -1010,6 +1024,39 @@ async def trial_status(company_id: int):
         else:
             return {"status": "expired", "days_left": 0}
     return {"status": "trial", "days_left": 14}
+
+# ── INSPECTIONS ────────────────────────────────────────────────────────────
+
+class InspectionRecord(BaseModel):
+    company_id: int
+    driver_name: str
+    vehicle: str
+    status: str
+    damage_items: Optional[str] = None
+    gps_location: Optional[str] = None
+    notes: Optional[str] = None
+
+@app.post("/api/inspections")
+async def save_inspection(data: InspectionRecord):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("""INSERT INTO inspections (company_id,driver_name,vehicle,status,damage_items,gps_location,notes)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+              (data.company_id,data.driver_name,data.vehicle,data.status,
+               data.damage_items,data.gps_location,data.notes))
+    result = c.fetchone()
+    conn.commit()
+    conn.close()
+    return {"id": result["id"], "message": "Inspection saved"}
+
+@app.get("/api/inspections")
+async def get_inspections(company_id: int = 1):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT * FROM inspections WHERE company_id=%s ORDER BY submitted_at DESC", (company_id,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
 
 if __name__ == "__main__":
     import uvicorn
