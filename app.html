@@ -914,10 +914,14 @@ function TruckPayView({drivers}) {
     // Add logo if exists
     if(settings?.logo_base64) {
       try {
-        doc.addImage(settings.logo_base64, "JPEG", 14, 4, 20, 20);
-        doc.setFontSize(20);
+        doc.addImage(settings.logo_base64, "JPEG", 14, 3, 18, 18);
+        doc.setFontSize(16);
         doc.setFont("helvetica","bold");
-        doc.text(companyName, 38, 12);
+        doc.text(companyName, 36, 10);
+        doc.setFontSize(9);
+        doc.setFont("helvetica","normal");
+        doc.text("Driver Settlement Sheet", 36, 17);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 140, 10);
       } catch(e) {
         doc.setFontSize(20);
         doc.setFont("helvetica","bold");
@@ -931,8 +935,6 @@ function TruckPayView({drivers}) {
 
     doc.setFontSize(10);
     doc.setFont("helvetica","normal");
-    doc.text("Driver Settlement Sheet", 14, 20);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 140, 20);
 
     // Driver Info Box
     doc.setFillColor(240,245,242);
