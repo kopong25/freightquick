@@ -6,6 +6,8 @@ import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
 import requests as http_requests
+import resend
+resend.api_key = os.environ.get("RESEND_API_KEY")
 import random
 import os
 import hashlib
@@ -251,25 +253,6 @@ def init_db():
     # Add trial columns if they don't exist
     c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP")
     c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_subscribed INTEGER DEFAULT 0")
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS company_settings (
-            id SERIAL PRIMARY KEY,
-            company_id INTEGER UNIQUE NOT NULL,
-            logo_base64 TEXT,
-            company_name TEXT,
-            address TEXT,
-            city TEXT,
-            state TEXT,
-            zip_code TEXT,
-            phone TEXT,
-            email TEXT,
-            dot_number TEXT,
-            mc_number TEXT,
-            tax_id TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -786,16 +769,22 @@ async def invite_driver(data: InviteDriver):
                   (data.company_id,data.full_name,data.email,"",token))
         conn.commit()
         conn.close()
-        return {"message":"Driver invited","invite_token":token}
+        invite_link = f"https://freightquick-ap.onrender.com/auth.html?token={token}&email={data.email}"
+        send_email(
+            to=data.email,
+            subject=f"You've been invited to join FreightQuick",
+            html=invite_email_html(data.full_name, invite_link, "Your Fleet")
+        )
+        return {"message":"Driver invited","invite_token":token,"invite_link":invite_link}
     except:
         conn.close()
         raise HTTPException(status_code=400,detail="Email already exists")
     
 class AcceptInvite(BaseModel):
-         token: str
-         email: str
-         full_name: str
-         password: str   
+    token: str
+    email: str
+    full_name: str
+    password: str  
 
 @app.post("/api/auth/accept-invite")
 async def accept_invite(data: AcceptInvite):
@@ -830,6 +819,27 @@ async def make_superadmin(data: dict):
     conn.close()
     return {"message":"Superadmin role granted"}
 
+class DamageAlert(BaseModel):
+    company_id: int
+    driver_name: str
+    vehicle: str
+    issues: list
+
+@app.post("/api/inspection/damage-alert")
+async def damage_alert(data: DamageAlert):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT u.email,co.company_name FROM users u JOIN companies co ON u.company_id=co.id WHERE u.company_id=%s AND u.role='manager'", (data.company_id,))
+    managers = c.fetchall()
+    conn.close()
+    for m in managers:
+        send_email(
+            to=m["email"],
+            subject=f"⚠ Damage Alert — {data.vehicle}",
+            html=damage_alert_email_html(data.driver_name, data.vehicle, data.issues, m["company_name"])
+        )
+    return {"message": "Alert sent"}
+
 # ── SUPERADMIN ─────────────────────────────────────────────────────────────
 
 @app.get("/api/superadmin/companies")
@@ -844,6 +854,87 @@ async def get_all_companies():
     companies = [dict(r) for r in c.fetchall()]
     conn.close()
     return companies
+
+# ── EMAIL NOTIFICATIONS ────────────────────────────────────────────────────
+
+def send_email(to: str, subject: str, html: str):
+    try:
+        resend.Emails.send({
+            "from": "FreightQuick <notifications@freightquick.app>",
+            "to": to,
+            "subject": subject,
+            "html": html
+        })
+        return True
+    except Exception as e:
+        print(f"Email error: {e}")
+        return False
+
+def invite_email_html(full_name: str, invite_link: str, company_name: str) -> str:
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#E8E0D0;padding:0;border-radius:12px;overflow:hidden">
+      <div style="background:#FF6B35;padding:24px;text-align:center">
+        <h1 style="color:#fff;margin:0;font-size:24px">⚡ FreightQuick</h1>
+        <p style="color:#fff;margin:8px 0 0;opacity:0.9">Fleet Management Platform</p>
+      </div>
+      <div style="padding:32px">
+        <h2 style="color:#F5F0E8;margin:0 0 16px">You've been invited!</h2>
+        <p style="color:#9CA3AF;line-height:1.6">Hi {full_name},</p>
+        <p style="color:#9CA3AF;line-height:1.6"><strong style="color:#F5F0E8">{company_name}</strong> has invited you to join FreightQuick as a driver.</p>
+        <div style="text-align:center;margin:32px 0">
+          <a href="{invite_link}" style="background:#FF6B35;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px">Activate Your Account →</a>
+        </div>
+        <p style="color:#6B7280;font-size:12px;line-height:1.6">This link will expire in 7 days. If you did not expect this invitation please ignore this email.</p>
+      </div>
+      <div style="background:#161616;padding:16px;text-align:center">
+        <p style="color:#6B7280;font-size:11px;margin:0">FreightQuick — Fleet Management Platform</p>
+      </div>
+    </div>
+    """
+
+def damage_alert_email_html(driver_name: str, vehicle: str, issues: list, company_name: str) -> str:
+    issues_html = "".join([f"<li style='color:#F87171;margin-bottom:4px'>⚠ {issue}</li>" for issue in issues])
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#E8E0D0;padding:0;border-radius:12px;overflow:hidden">
+      <div style="background:#DC2626;padding:24px;text-align:center">
+        <h1 style="color:#fff;margin:0;font-size:24px">⚠ Damage Alert</h1>
+        <p style="color:#fff;margin:8px 0 0;opacity:0.9">Vehicle inspection found issues</p>
+      </div>
+      <div style="padding:32px">
+        <p style="color:#9CA3AF;line-height:1.6">A vehicle inspection submitted by <strong style="color:#F5F0E8">{driver_name}</strong> has reported damage on <strong style="color:#F5F0E8">{vehicle}</strong>.</p>
+        <div style="background:#1a0707;border:1px solid #450a0a;border-radius:8px;padding:16px;margin:20px 0">
+          <p style="color:#F87171;font-weight:700;margin:0 0 10px">Damaged Items:</p>
+          <ul style="margin:0;padding-left:20px">{issues_html}</ul>
+        </div>
+        <p style="color:#9CA3AF;font-size:13px">Please review the inspection report and take appropriate action.</p>
+      </div>
+      <div style="background:#161616;padding:16px;text-align:center">
+        <p style="color:#6B7280;font-size:11px;margin:0">{company_name} — Powered by FreightQuick</p>
+      </div>
+    </div>
+    """
+
+def trial_ending_email_html(company_name: str, days_left: int) -> str:
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#E8E0D0;padding:0;border-radius:12px;overflow:hidden">
+      <div style="background:#FF6B35;padding:24px;text-align:center">
+        <h1 style="color:#fff;margin:0;font-size:24px">⚡ FreightQuick</h1>
+      </div>
+      <div style="padding:32px">
+        <h2 style="color:#F5F0E8;margin:0 0 16px">Your trial ends in {days_left} days</h2>
+        <p style="color:#9CA3AF;line-height:1.6">Hi {company_name},</p>
+        <p style="color:#9CA3AF;line-height:1.6">Your 14-day free trial ends in <strong style="color:#FF6B35">{days_left} days</strong>. Subscribe now to keep access to all your fleet data.</p>
+        <div style="text-align:center;margin:32px 0">
+          <a href="https://freightquick-ap.onrender.com/app.html" style="background:#FF6B35;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px">Subscribe Now →</a>
+        </div>
+        <p style="color:#6B7280;font-size:12px">Plans start at $29/driver/month. Cancel anytime.</p>
+      </div>
+      <div style="background:#161616;padding:16px;text-align:center">
+        <p style="color:#6B7280;font-size:11px;margin:0">FreightQuick — Fleet Management Platform</p>
+      </div>
+    </div>
+    """
+
 # ── STRIPE PAYMENTS ────────────────────────────────────────────────────────
 
 class CreateCheckout(BaseModel):
@@ -919,60 +1010,6 @@ async def trial_status(company_id: int):
         else:
             return {"status": "expired", "days_left": 0}
     return {"status": "trial", "days_left": 14}
-# ── COMPANY SETTINGS ───────────────────────────────────────────────────────
-
-class CompanySettings(BaseModel):
-    company_id: int
-    logo_base64: Optional[str] = None
-    company_name: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    dot_number: Optional[str] = None
-    mc_number: Optional[str] = None
-    tax_id: Optional[str] = None
-
-@app.get("/api/settings/{company_id}")
-async def get_settings(company_id: int):
-    conn = get_db()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT * FROM company_settings WHERE company_id=%s", (company_id,))
-    settings = c.fetchone()
-    conn.close()
-    if not settings:
-        return {"company_id": company_id}
-    return dict(settings)
-
-@app.post("/api/settings")
-async def save_settings(data: CompanySettings):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO company_settings (company_id,logo_base64,company_name,address,city,state,zip_code,phone,email,dot_number,mc_number,tax_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        ON CONFLICT (company_id) DO UPDATE SET
-        logo_base64=EXCLUDED.logo_base64,
-        company_name=EXCLUDED.company_name,
-        address=EXCLUDED.address,
-        city=EXCLUDED.city,
-        state=EXCLUDED.state,
-        zip_code=EXCLUDED.zip_code,
-        phone=EXCLUDED.phone,
-        email=EXCLUDED.email,
-        dot_number=EXCLUDED.dot_number,
-        mc_number=EXCLUDED.mc_number,
-        tax_id=EXCLUDED.tax_id,
-        updated_at=CURRENT_TIMESTAMP
-    """, (data.company_id,data.logo_base64,data.company_name,data.address,
-          data.city,data.state,data.zip_code,data.phone,data.email,
-          data.dot_number,data.mc_number,data.tax_id))
-    conn.commit()
-    conn.close()
-    return {"message": "Settings saved"}
-
 
 if __name__ == "__main__":
     import uvicorn
