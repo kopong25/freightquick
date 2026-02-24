@@ -891,23 +891,48 @@ function TruckPayView({drivers}) {
     if(s) setSummary(s);
   }
 
-  function exportPDF(r) {
+  async function exportPDF(r) {
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF();
     const orange = [255,107,53];
     const dark = [13,18,16];
 
+    // Load company settings
+    const settings = await apiFetch(`/settings/${fqUser?.company_id}`);
+    const companyName = settings?.company_name || fqUser?.company_name || "FreightQuick";
+    const companyAddress = settings?.address ? `${settings.address}, ${settings.city||""} ${settings.state||""} ${settings.zip_code||""}` : "";
+    const companyPhone = settings?.phone || "";
+    const companyEmail = settings?.email || "";
+    const companyDOT = settings?.dot_number || "";
+    const companyMC = settings?.mc_number || "";
+
     // Header
     doc.setFillColor(...orange);
     doc.rect(0,0,210,28,"F");
     doc.setTextColor(255,255,255);
-    doc.setFontSize(20);
-    doc.setFont("helvetica","bold");
-    doc.text("FreightQuick",14,12);
+
+    // Add logo if exists
+    if(settings?.logo_base64) {
+      try {
+        doc.addImage(settings.logo_base64, "JPEG", 14, 4, 20, 20);
+        doc.setFontSize(20);
+        doc.setFont("helvetica","bold");
+        doc.text(companyName, 38, 12);
+      } catch(e) {
+        doc.setFontSize(20);
+        doc.setFont("helvetica","bold");
+        doc.text(companyName, 14, 12);
+      }
+    } else {
+      doc.setFontSize(20);
+      doc.setFont("helvetica","bold");
+      doc.text(companyName, 14, 12);
+    }
+
     doc.setFontSize(10);
     doc.setFont("helvetica","normal");
-    doc.text("Driver Settlement Sheet",14,20);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`,140,20);
+    doc.text("Driver Settlement Sheet", 14, 20);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 140, 20);
 
     // Driver Info Box
     doc.setFillColor(240,245,242);
@@ -976,9 +1001,12 @@ function TruckPayView({drivers}) {
     doc.setTextColor(100,120,110);
     doc.setFontSize(8);
     doc.setFont("helvetica","normal");
-    doc.text("FreightQuick — Fleet Management Platform",14,283);
-    doc.text("freightquick-ap.onrender.com",14,289);
-    doc.text(`Settlement ID: FQ-${r.id}-${r.week_ending}`,140,283);
+    doc.text(companyName,14,281);
+    if(companyAddress) doc.text(companyAddress,14,286);
+    if(companyPhone) doc.text(`Tel: ${companyPhone}`,14,291);
+    if(companyDOT) doc.text(`DOT: ${companyDOT}`,120,281);
+    if(companyMC) doc.text(`MC: ${companyMC}`,120,286);
+    doc.text(`Settlement ID: FQ-${r.id}-${r.week_ending}`,120,291);
 
     doc.save(`Settlement_${r.username}_${r.week_ending}.pdf`);
   }
