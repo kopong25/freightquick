@@ -151,12 +151,13 @@ const inviteToken = urlParams.get("token");
 const inviteEmail = urlParams.get("email");
 
 if(inviteToken && inviteEmail) {
-  // Show set password form
-  document.querySelector(".tabs").style.display = "none";
-  document.getElementById("signin-form").style.display = "none";
-  document.getElementById("signup-form").style.display = "none";
-  document.getElementById("invite-form").style.display = "block";
-  document.getElementById("invite-email").value = inviteEmail;
+  window.addEventListener("DOMContentLoaded", function() {
+    document.querySelector(".tabs").style.display = "none";
+    document.getElementById("form-login").style.display = "none";
+    document.getElementById("form-signup").style.display = "none";
+    document.getElementById("invite-form").style.display = "block";
+    document.getElementById("invite-email").value = inviteEmail;
+  });
 }
 
 function showTab(tab) {
