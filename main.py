@@ -772,11 +772,11 @@ async def invite_driver(data: InviteDriver):
         conn.close()
         raise HTTPException(status_code=400,detail="Email already exists")
     
-    class AcceptInvite(BaseModel):
-    token: str
-    email: str
-    full_name: str
-    password: str
+class AcceptInvite(BaseModel):
+         token: str
+         email: str
+         full_name: str
+         password: str   
 
 @app.post("/api/auth/accept-invite")
 async def accept_invite(data: AcceptInvite):
