@@ -253,6 +253,25 @@ def init_db():
     c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_subscribed INTEGER DEFAULT 0")
 
     c.execute("""
+        CREATE TABLE IF NOT EXISTS company_settings (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER UNIQUE NOT NULL,
+            logo_base64 TEXT,
+            company_name TEXT,
+            address TEXT,
+            city TEXT,
+            state TEXT,
+            zip_code TEXT,
+            phone TEXT,
+            email TEXT,
+            dot_number TEXT,
+            mc_number TEXT,
+            tax_id TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             company_id INTEGER NOT NULL,
@@ -900,6 +919,60 @@ async def trial_status(company_id: int):
         else:
             return {"status": "expired", "days_left": 0}
     return {"status": "trial", "days_left": 14}
+# ── COMPANY SETTINGS ───────────────────────────────────────────────────────
+
+class CompanySettings(BaseModel):
+    company_id: int
+    logo_base64: Optional[str] = None
+    company_name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    dot_number: Optional[str] = None
+    mc_number: Optional[str] = None
+    tax_id: Optional[str] = None
+
+@app.get("/api/settings/{company_id}")
+async def get_settings(company_id: int):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT * FROM company_settings WHERE company_id=%s", (company_id,))
+    settings = c.fetchone()
+    conn.close()
+    if not settings:
+        return {"company_id": company_id}
+    return dict(settings)
+
+@app.post("/api/settings")
+async def save_settings(data: CompanySettings):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO company_settings (company_id,logo_base64,company_name,address,city,state,zip_code,phone,email,dot_number,mc_number,tax_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (company_id) DO UPDATE SET
+        logo_base64=EXCLUDED.logo_base64,
+        company_name=EXCLUDED.company_name,
+        address=EXCLUDED.address,
+        city=EXCLUDED.city,
+        state=EXCLUDED.state,
+        zip_code=EXCLUDED.zip_code,
+        phone=EXCLUDED.phone,
+        email=EXCLUDED.email,
+        dot_number=EXCLUDED.dot_number,
+        mc_number=EXCLUDED.mc_number,
+        tax_id=EXCLUDED.tax_id,
+        updated_at=CURRENT_TIMESTAMP
+    """, (data.company_id,data.logo_base64,data.company_name,data.address,
+          data.city,data.state,data.zip_code,data.phone,data.email,
+          data.dot_number,data.mc_number,data.tax_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Settings saved"}
+
 
 if __name__ == "__main__":
     import uvicorn
