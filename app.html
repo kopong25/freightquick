@@ -93,6 +93,7 @@
 <script type="text/babel">
 const fqUser = JSON.parse(localStorage.getItem('fq_user') || 'null');
 if(!fqUser) { window.location.href = 'auth.html'; }
+const DEFAULT_VIEW = fqUser?.role === 'driver' ? 'inspection' : 'analytics';
 const { useState, useEffect, useCallback } = React;
 const API = "https://freightquick-app.onrender.com/api";
 
@@ -168,17 +169,17 @@ function KpiCard({label,value,sub,color}) {
 
 // ── SIDEBAR ─────────────────────────────────────────────────────────────────
 const NAV = [
-  {id:"analytics",icon:"📊",label:"Analytics"},
-  {id:"dispatch",icon:"🚛",label:"Dispatch"},
-  {id:"loads",icon:"📦",label:"Loads"},
-  {id:"drivers",icon:"👤",label:"Drivers"},
-  {id:"routes",icon:"🗺️",label:"Routes"},
-  {id:"compliance",icon:"📋",label:"Compliance"},
-  {id:"truckpay",icon:"💰",label:"TruckPay"},
-   {id:"insurance",icon:"🛡️",label:"Insurance"},
- {id:"companies",icon:"🏢",label:"Companies"},
-   {id:"inspection",icon:"🚚",label:"Inspection"},
-  {id:"billing",icon:"💳",label:"Billing"},
+  {id:"analytics",icon:"📊",label:"Analytics",roles:["manager","superadmin"]},
+  {id:"dispatch",icon:"🚛",label:"Dispatch",roles:["manager","superadmin"]},
+  {id:"loads",icon:"📦",label:"Loads",roles:["manager","superadmin"]},
+  {id:"drivers",icon:"👤",label:"Drivers",roles:["manager","superadmin"]},
+  {id:"routes",icon:"🗺️",label:"Routes",roles:["manager","superadmin"]},
+  {id:"compliance",icon:"📋",label:"Compliance",roles:["manager","superadmin","driver"]},
+  {id:"truckpay",icon:"💰",label:"TruckPay",roles:["manager","superadmin","driver"]},
+  {id:"insurance",icon:"🛡️",label:"Insurance",roles:["manager","superadmin"]},
+  {id:"companies",icon:"🏢",label:"Companies",roles:["superadmin"]},
+  {id:"inspection",icon:"🚚",label:"Inspection",roles:["manager","superadmin","driver"]},
+  {id:"billing",icon:"💳",label:"Billing",roles:["manager","superadmin"]},
 ];
 
 
@@ -194,7 +195,7 @@ function Sidebar({active,setActive}) {
         </div>
       </div>
       <div style={{padding:"12px 10px",flex:1}}>
-        {NAV.map(n=>(
+        {NAV.filter(n=>n.roles.includes(fqUser?.role)).map(n=>(
           <button key={n.id} onClick={()=>setActive(n.id)}
             style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,
               background:active===n.id?"var(--green-glow)":"transparent",
@@ -1995,7 +1996,8 @@ function CompaniesView() {
 
 // ── MOBILE NAV ─────────────────────────────────────────────────────────────
 function MobileNav({active, setActive}) {
-  const topNav = NAV.slice(0, 5);
+  const allowedNav = NAV.filter(n=>n.roles.includes(fqUser?.role));
+  const topNav = allowedNav.slice(0, 5);
   return (
     <div className="mobile-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"var(--bg2)",borderTop:"1px solid var(--border)",zIndex:100,padding:"6px 0",paddingBottom:"env(safe-area-inset-bottom)"}}>
       <div style={{display:"flex",justifyContent:"space-around",alignItems:"center"}}>
@@ -2018,7 +2020,8 @@ function MobileNav({active, setActive}) {
 
 // ── MOBILE MORE MENU ───────────────────────────────────────────────────────
 function MobileMoreMenu({active, setActive}) {
-  const moreNav = NAV.slice(5);
+  const allowedNav = NAV.filter(n=>n.roles.includes(fqUser?.role));
+  const moreNav = allow 
   return (
     <div style={{padding:16,paddingBottom:80}}>
       <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:2,marginBottom:16}}>MORE MODULES</div>
@@ -2059,7 +2062,7 @@ function TopBar({view}) {
 
 // ── APP ────────────────────────────────────────────────────────────────────
 function App() {
-  const [view,setView] = useState("analytics");
+  const [view,setView] = useState(DEFAULT_VIEW);
   const [drivers,setDrivers] = useState(MOCK.drivers);
   const [loads,setLoads] = useState(MOCK.loads);
   const [analytics,setAnalytics] = useState(MOCK.analytics);
