@@ -6,8 +6,6 @@ import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
 import requests as http_requests
-import resend
-resend.api_key = os.environ.get("RESEND_API_KEY")
 import random
 import os
 import hashlib
@@ -15,6 +13,8 @@ import secrets
 import stripe
 STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY")
 stripe.api_key = STRIPE_KEY
+import resend
+resend.api_key = os.environ.get("RESEND_API_KEY")
 
 app = FastAPI(title="FreightQuick API", version="1.0.0")
 
