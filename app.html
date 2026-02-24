@@ -1560,37 +1560,69 @@ function InspectionView({drivers}) {
   function getProgress() { return Math.round((Object.keys(checklistState).length/CHECKLIST_ITEMS.length)*100); }
   function getDamageItems() { return CHECKLIST_ITEMS.filter(i=>checklistState[i.id]==="damaged"); }
 
-  function submitInspection() {
+  async function submitInspection() {
     setSubmitting(true);
-    // Get real GPS location
+    // Get GPS location
+    let gpsLoc = "Location unavailable";
     if(navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGpsLocation(`${pos.coords.latitude.toFixed(5)}°N, ${pos.coords.longitude.toFixed(5)}°W`);
-          setGpsAccuracy(Math.round(pos.coords.accuracy));
-        },
-        () => { setGpsLocation("Location unavailable"); }
-      );
+      gpsLoc = await new Promise((resolve)=>{
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const loc = `${pos.coords.latitude.toFixed(5)}°N, ${pos.coords.longitude.toFixed(5)}°W`;
+            setGpsLocation(loc);
+            setGpsAccuracy(Math.round(pos.coords.accuracy));
+            resolve(loc);
+          },
+          () => { setGpsLocation("Location unavailable"); resolve("Location unavailable"); },
+          {timeout:5000}
+        );
+      });
     }
-    setTimeout(()=>{
+    const damageItems = getDamageItems();
+    const status = damageItems.length > 0 ? "issues" : "clear";
+    // Save to database
+    try {
+      const res = await apiFetch("/inspections", {
+        method: "POST",
+        body: JSON.stringify({
+          company_id: fqUser?.company_id || 1,
+          driver_name: driver?.full_name || driver?.username,
+          vehicle: `${vehicle.id} — ${vehicle.plate}`,
+          status: status,
+          damage_items: damageItems.map(i=>i.label).join(", ") || null,
+          gps_location: gpsLoc,
+          notes: Object.values(notes).filter(Boolean).join("; ") || null
+        })
+      });
       const ins = {
-        id:`INS-${2391+inspections.length+1}`,
-        driver:driver?.full_name||driver?.username,
-        vehicle:vehicle.id,
-        plate:vehicle.plate,
-        timestamp:currentTime,
-        status:getDamageItems().length>0?"issues":"clear",
-        issues:getDamageItems().map(i=>i.label),
+        id: res?.id ? `INS-${res.id}` : `INS-${Date.now()}`,
+        driver: driver?.full_name || driver?.username,
+        vehicle: vehicle.id,
+        plate: vehicle.plate,
+        timestamp: currentTime,
+        status: status,
+        issues: damageItems.map(i=>i.label),
       };
       setInspections(prev=>[ins,...prev]);
-      if(getDamageItems().length>0) {
-        setAlerts(prev=>[{id:Date.now(),type:"damage",message:`${vehicle.id} — Damage: ${getDamageItems().map(i=>i.label).join(", ")} by ${driver?.full_name||driver?.username}`,time:"Just now",read:false},...prev]);
+      if(damageItems.length > 0) {
+        setAlerts(prev=>[{id:Date.now(),type:"damage",message:`${vehicle.id} — Damage: ${damageItems.map(i=>i.label).join(", ")} by ${driver?.full_name||driver?.username}`,time:"Just now",read:false},...prev]);
+        // Send damage alert email
+        apiFetch("/inspection/damage-alert", {
+          method: "POST",
+          body: JSON.stringify({
+            company_id: fqUser?.company_id || 1,
+            driver_name: driver?.full_name || driver?.username,
+            vehicle: `${vehicle.id} — ${vehicle.plate}`,
+            issues: damageItems.map(i=>i.label)
+          })
+        });
       }
-      setSubmitting(false);
-      setStep(4);
-    },1500);
+    } catch(e) {
+      console.error("Inspection save error:", e);
+    }
+    setSubmitting(false);
+    setStep(4);
   }
-
    function resetForm() { setDriver(null);setVehicle(null);setChecklistState({});setNotes({});setPhotos({});setStep(1);setSubview("dashboard");closeCamera(); }
 
   async function openCamera(itemId) {
