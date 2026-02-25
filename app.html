@@ -1782,7 +1782,8 @@ function InspectionView({drivers}) {
                   ))}
                 </div>
               </div>
-              <button className="btn btn-green" onClick={()=>driver&&vehicle&&setStep(2)} style={{opacity:driver&&vehicle?1:0.4}}>Start Inspection →</button>
+              <button className="btn btn-green" onClick={()=>driver&&vehicle&&setStep(2)} style={{opacity:driver&&vehicle?1:0.4,width:"100%",marginTop:16,padding:"14px 0",fontSize:16}}>Start Inspection →</button>
+              <div style={{height:80}}/>
             </div>
           )}
 
