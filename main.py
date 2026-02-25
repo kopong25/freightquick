@@ -282,6 +282,39 @@ def init_db():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS fuel_entries (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER,
+            driver_id INTEGER,
+            driver_name TEXT,
+            vehicle TEXT,
+            state TEXT,
+            gallons NUMERIC,
+            price_per_gallon NUMERIC,
+            total_cost NUMERIC,
+            odometer INTEGER,
+            fuel_date DATE,
+            fuel_type TEXT DEFAULT 'diesel',
+            vendor TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS vehicle_miles (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER,
+            vehicle TEXT,
+            driver_name TEXT,
+            state TEXT,
+            miles NUMERIC,
+            trip_date DATE,
+            load_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Seed drivers if empty
     c.execute("SELECT COUNT(*) FROM drivers")
     if c.fetchone()[0] == 0:
@@ -1057,6 +1090,148 @@ async def get_inspections(company_id: int = 1):
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return rows
+
+# ── FUEL & IFTA ────────────────────────────────────────────────────────────
+
+IFTA_RATES = {
+    "AL":0.290,"AK":0.080,"AZ":0.260,"AR":0.285,"CA":0.823,"CO":0.205,
+    "CT":0.402,"DE":0.220,"FL":0.337,"GA":0.312,"ID":0.320,"IL":0.455,
+    "IN":0.530,"IA":0.325,"KS":0.260,"KY":0.246,"LA":0.200,"ME":0.312,
+    "MD":0.373,"MA":0.240,"MI":0.263,"MN":0.285,"MS":0.180,"MO":0.170,
+    "MT":0.290,"NE":0.246,"NV":0.270,"NH":0.222,"NJ":0.418,"NM":0.210,
+    "NY":0.474,"NC":0.362,"ND":0.230,"OH":0.385,"OK":0.190,"OR":0.360,
+    "PA":0.576,"RI":0.340,"SC":0.260,"SD":0.280,"TN":0.270,"TX":0.200,
+    "UT":0.245,"VT":0.270,"VA":0.262,"WA":0.494,"WV":0.357,"WI":0.329,
+    "WY":0.240
+}
+
+class FuelEntry(BaseModel):
+    company_id: int
+    driver_name: str
+    vehicle: str
+    state: str
+    gallons: float
+    price_per_gallon: float
+    odometer: Optional[int] = None
+    fuel_date: str
+    fuel_type: str = "diesel"
+    vendor: Optional[str] = None
+    notes: Optional[str] = None
+
+class MilesEntry(BaseModel):
+    company_id: int
+    vehicle: str
+    driver_name: str
+    state: str
+    miles: float
+    trip_date: str
+    load_id: Optional[int] = None
+
+@app.post("/api/fuel")
+async def add_fuel(data: FuelEntry):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    total = round(data.gallons * data.price_per_gallon, 2)
+    c.execute("""INSERT INTO fuel_entries (company_id,driver_name,vehicle,state,gallons,price_per_gallon,total_cost,odometer,fuel_date,fuel_type,vendor,notes)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+              (data.company_id,data.driver_name,data.vehicle,data.state,data.gallons,
+               data.price_per_gallon,total,data.odometer,data.fuel_date,data.fuel_type,data.vendor,data.notes))
+    result = c.fetchone()
+    conn.commit()
+    conn.close()
+    return {"id": result["id"], "total_cost": total, "message": "Fuel entry saved"}
+
+@app.get("/api/fuel")
+async def get_fuel(company_id: int = 1):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT * FROM fuel_entries WHERE company_id=%s ORDER BY fuel_date DESC", (company_id,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+@app.post("/api/miles")
+async def add_miles(data: MilesEntry):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("""INSERT INTO vehicle_miles (company_id,vehicle,driver_name,state,miles,trip_date,load_id)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+              (data.company_id,data.vehicle,data.driver_name,data.state,data.miles,data.trip_date,data.load_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Miles recorded"}
+
+@app.get("/api/ifta/report")
+async def ifta_report(company_id: int = 1, quarter: int = 1, year: int = 2026):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    # Quarter date ranges
+    quarters = {1:("01-01","03-31"),2:("04-01","06-30"),3:("07-01","09-30"),4:("10-01","12-31")}
+    start, end = quarters[quarter]
+    start_date = f"{year}-{start}"
+    end_date = f"{year}-{end}"
+    # Get miles by state
+    c.execute("""SELECT state, SUM(miles) as total_miles FROM vehicle_miles
+                 WHERE company_id=%s AND trip_date BETWEEN %s AND %s GROUP BY state""",
+              (company_id, start_date, end_date))
+    miles_by_state = {r["state"]: float(r["total_miles"]) for r in c.fetchall()}
+    # Get fuel by state
+    c.execute("""SELECT state, SUM(gallons) as total_gallons, SUM(total_cost) as total_cost
+                 FROM fuel_entries WHERE company_id=%s AND fuel_date BETWEEN %s AND %s GROUP BY state""",
+              (company_id, start_date, end_date))
+    fuel_by_state = {r["state"]: {"gallons": float(r["total_gallons"]), "cost": float(r["total_cost"])} for r in c.fetchall()}
+    # Totals
+    total_miles = sum(miles_by_state.values())
+    total_gallons = sum(f["gallons"] for f in fuel_by_state.values())
+    fleet_mpg = round(total_miles / total_gallons, 2) if total_gallons > 0 else 0
+    # IFTA calculation per state
+    jurisdictions = []
+    for state in set(list(miles_by_state.keys()) + list(fuel_by_state.keys())):
+        miles = miles_by_state.get(state, 0)
+        gallons_purchased = fuel_by_state.get(state, {}).get("gallons", 0)
+        rate = IFTA_RATES.get(state, 0.25)
+        gallons_consumed = round(miles / fleet_mpg, 3) if fleet_mpg > 0 else 0
+        tax_due = round((gallons_consumed - gallons_purchased) * rate, 2)
+        jurisdictions.append({
+            "state": state,
+            "miles": round(miles, 1),
+            "gallons_purchased": round(gallons_purchased, 3),
+            "gallons_consumed": round(gallons_consumed, 3),
+            "tax_rate": rate,
+            "tax_due": tax_due,
+            "status": "DUE" if tax_due > 0 else "CREDIT"
+        })
+    jurisdictions.sort(key=lambda x: x["state"])
+    total_tax = round(sum(j["tax_due"] for j in jurisdictions), 2)
+    conn.close()
+    return {
+        "quarter": quarter, "year": year,
+        "total_miles": round(total_miles, 1),
+        "total_gallons": round(total_gallons, 3),
+        "fleet_mpg": fleet_mpg,
+        "total_tax_due": total_tax,
+        "jurisdictions": jurisdictions
+    }
+
+@app.get("/api/fuel/analytics")
+async def fuel_analytics(company_id: int = 1):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("""SELECT vehicle, 
+                 SUM(gallons) as total_gallons,
+                 SUM(total_cost) as total_cost,
+                 AVG(price_per_gallon) as avg_ppg,
+                 COUNT(*) as fill_ups
+                 FROM fuel_entries WHERE company_id=%s GROUP BY vehicle""", (company_id,))
+    by_vehicle = [dict(r) for r in c.fetchall()]
+    c.execute("""SELECT state, SUM(total_cost) as spend FROM fuel_entries
+                 WHERE company_id=%s GROUP BY state ORDER BY spend DESC LIMIT 10""", (company_id,))
+    by_state = [dict(r) for r in c.fetchall()]
+    c.execute("""SELECT SUM(total_cost) as total_spend, SUM(gallons) as total_gallons,
+                 AVG(price_per_gallon) as avg_ppg FROM fuel_entries WHERE company_id=%s""", (company_id,))
+    totals = dict(c.fetchone())
+    conn.close()
+    return {"by_vehicle": by_vehicle, "by_state": by_state, "totals": totals}
 
 if __name__ == "__main__":
     import uvicorn
