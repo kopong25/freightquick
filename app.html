@@ -2230,7 +2230,7 @@ function MobileNav({active, setActive}) {
 // ── MOBILE MORE MENU ───────────────────────────────────────────────────────
 function MobileMoreMenu({active, setActive}) {
   const allowedNav = NAV.filter(n=>n.roles.includes(fqUser?.role));
-  const moreNav = allow 
+  const moreNav = allowedNav.slice(5);
   return (
     <div style={{padding:16,paddingBottom:80}}>
       <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:2,marginBottom:16}}>MORE MODULES</div>
