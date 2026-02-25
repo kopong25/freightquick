@@ -2019,7 +2019,10 @@ function FuelIFTAView({drivers}) {
           <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Fuel Management & Tax</div>
           <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Fuel & IFTA</div>
         </div>
-        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Log Fuel</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-ghost" onClick={()=>setShowMiles(!showMiles)}>🛣 Log Miles</button>
+          <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Log Fuel</button>
+        </div>
       </div>
 
       {/* KPI Cards */}
