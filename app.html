@@ -180,7 +180,8 @@ const NAV = [
   {id:"companies",icon:"🏢",label:"Companies",roles:["superadmin"]},
   {id:"inspection",icon:"🚚",label:"Inspection",roles:["manager","superadmin","driver"]},
   {id:"billing",icon:"💳",label:"Billing",roles:["manager","superadmin"]},
-  {id:"settings",icon:"⚙️",label:"Settings",roles:["manager","superadmin"]},
+   {id:"settings",icon:"⚙️",label:"Settings",roles:["manager","superadmin"]},
+  {id:"ifta",icon:"⛽",label:"Fuel & IFTA",roles:["manager","superadmin"]},
 ];
 
 
@@ -1917,6 +1918,376 @@ function InspectionView({drivers}) {
   );
 }
 
+// ── FUEL & IFTA VIEW ───────────────────────────────────────────────────────
+const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+
+function FuelIFTAView({drivers}) {
+  const [tab, setTab] = useState("dashboard");
+  const [fuelLog, setFuelLog] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [ifta, setIfta] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [iftaLoading, setIftaLoading] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [quarter, setQuarter] = useState(1);
+  const [year, setYear] = useState(2026);
+  const [form, setForm] = useState({
+    driver_name:"", vehicle:"", state:"TX", gallons:"", price_per_gallon:"",
+    odometer:"", fuel_date:new Date().toISOString().slice(0,10),
+    fuel_type:"diesel", vendor:"", notes:""
+  });
+
+  useEffect(()=>{ loadAll(); },[]);
+
+  async function loadAll() {
+    setLoading(true);
+    const [fuel, anal] = await Promise.all([
+      apiFetch(`/fuel?company_id=${fqUser?.company_id||1}`),
+      apiFetch(`/fuel/analytics?company_id=${fqUser?.company_id||1}`)
+    ]);
+    if(fuel) setFuelLog(fuel);
+    if(anal) setAnalytics(anal);
+    setLoading(false);
+  }
+
+  async function loadIFTA() {
+    setIftaLoading(true);
+    const data = await apiFetch(`/ifta/report?company_id=${fqUser?.company_id||1}&quarter=${quarter}&year=${year}`);
+    if(data) setIfta(data);
+    setIftaLoading(false);
+  }
+
+  async function saveFuel(e) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await apiFetch("/fuel", {
+      method:"POST",
+      body: JSON.stringify({...form, company_id: fqUser?.company_id||1,
+        gallons: parseFloat(form.gallons), price_per_gallon: parseFloat(form.price_per_gallon),
+        odometer: form.odometer ? parseInt(form.odometer) : null})
+    });
+    setSaving(false);
+    if(res?.id) {
+      setToast("✅ Fuel entry saved!");
+      setShowAdd(false);
+      setForm({driver_name:"",vehicle:"",state:"TX",gallons:"",price_per_gallon:"",odometer:"",fuel_date:new Date().toISOString().slice(0,10),fuel_type:"diesel",vendor:"",notes:""});
+      loadAll();
+    } else {
+      setToast("❌ Error saving fuel entry");
+    }
+    setTimeout(()=>setToast(null),3000);
+  }
+
+  const totalSpend = analytics?.totals?.total_spend || 0;
+  const totalGallons = analytics?.totals?.total_gallons || 0;
+  const avgPPG = analytics?.totals?.avg_ppg || 0;
+
+  if(loading) return <div style={{padding:40,color:"var(--gray)"}}>Loading...</div>;
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:24}}>
+      {toast&&<div style={{background:toast.includes("✅")?"rgba(0,200,0,0.1)":"rgba(200,0,0,0.1)",border:`1px solid ${toast.includes("✅")?"rgba(0,200,0,0.3)":"rgba(200,0,0,0.3)"}`,borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:toast.includes("✅")?"var(--green)":"var(--red)"}}>{toast}</div>}
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Fuel Management & Tax</div>
+          <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>Fuel & IFTA</div>
+        </div>
+        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Log Fuel</button>
+      </div>
+
+      {/* KPI Cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+        {[
+          {label:"Total Fuel Spend",value:`$${Number(totalSpend).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`,icon:"💸",color:"var(--green)"},
+          {label:"Total Gallons",value:`${Number(totalGallons).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} gal`,icon:"⛽",color:"#60A5FA"},
+          {label:"Avg Price/Gallon",value:`$${Number(avgPPG).toFixed(3)}`,icon:"📊",color:"#FBBF24"},
+          {label:"Fuel Entries",value:fuelLog.length,icon:"📋",color:"#A78BFA"},
+        ].map(k=>(
+          <div key={k.label} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:16}}>
+            <div style={{fontSize:22,marginBottom:8}}>{k.icon}</div>
+            <div style={{fontFamily:"var(--display)",fontSize:20,fontWeight:800,color:k.color}}>{k.value}</div>
+            <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:4}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add Fuel Form */}
+      {showAdd&&(
+        <form onSubmit={saveFuel} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:16}}>⛽ Log Fuel Purchase</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:12}}>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>DRIVER</div>
+              <select value={form.driver_name} onChange={e=>setForm(p=>({...p,driver_name:e.target.value}))} style={{width:"100%"}} required>
+                <option value="">Select Driver</option>
+                {drivers.map(d=><option key={d.id} value={d.full_name||d.username}>{d.full_name||d.username}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>VEHICLE</div>
+              <input value={form.vehicle} onChange={e=>setForm(p=>({...p,vehicle:e.target.value}))} placeholder="TRK-001" style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>STATE</div>
+              <select value={form.state} onChange={e=>setForm(p=>({...p,state:e.target.value}))} style={{width:"100%"}} required>
+                {US_STATES.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>GALLONS</div>
+              <input type="number" step="0.001" value={form.gallons} onChange={e=>setForm(p=>({...p,gallons:e.target.value}))} placeholder="0.000" style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>PRICE/GALLON</div>
+              <input type="number" step="0.001" value={form.price_per_gallon} onChange={e=>setForm(p=>({...p,price_per_gallon:e.target.value}))} placeholder="0.000" style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>DATE</div>
+              <input type="date" value={form.fuel_date} onChange={e=>setForm(p=>({...p,fuel_date:e.target.value}))} style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>ODOMETER</div>
+              <input type="number" value={form.odometer} onChange={e=>setForm(p=>({...p,odometer:e.target.value}))} placeholder="Optional" style={{width:"100%"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>VENDOR</div>
+              <input value={form.vendor} onChange={e=>setForm(p=>({...p,vendor:e.target.value}))} placeholder="Pilot, TA, Love's..." style={{width:"100%"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>FUEL TYPE</div>
+              <select value={form.fuel_type} onChange={e=>setForm(p=>({...p,fuel_type:e.target.value}))} style={{width:"100%"}}>
+                <option value="diesel">Diesel</option>
+                <option value="gasoline">Gasoline</option>
+                <option value="reefer">Reefer</option>
+                <option value="def">DEF</option>
+              </select>
+            </div>
+          </div>
+          {form.gallons&&form.price_per_gallon&&(
+            <div style={{background:"var(--green-glow)",border:"1px solid rgba(255,107,53,0.2)",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"var(--green)",fontFamily:"var(--mono)"}}>
+              💰 Total: ${(parseFloat(form.gallons||0)*parseFloat(form.price_per_gallon||0)).toFixed(2)}
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <button type="submit" className="btn btn-green" disabled={saving}>{saving?"Saving...":"Save Fuel Entry"}</button>
+            <button type="button" className="btn btn-ghost" onClick={()=>setShowAdd(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        {[["dashboard","📊 Dashboard"],["log","⛽ Fuel Log"],["ifta","📋 IFTA Report"],["analytics","📈 Analytics"]].map(([id,label])=>(
+          <button key={id} className="btn btn-ghost btn-sm" onClick={()=>{ setTab(id); if(id==="ifta")loadIFTA(); }}
+            style={{background:tab===id?"var(--green-glow)":"transparent",color:tab===id?"var(--green)":"var(--gray)",borderColor:tab===id?"rgba(255,107,53,0.3)":"var(--border)"}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Dashboard Tab */}
+      {tab==="dashboard"&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            {/* By Vehicle */}
+            <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+              <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1,marginBottom:16}}>FUEL BY VEHICLE</div>
+              {analytics?.by_vehicle?.length > 0 ? analytics.by_vehicle.map(v=>(
+                <div key={v.vehicle} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600}}>{v.vehicle}</div>
+                    <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)"}}>{Number(v.total_gallons).toFixed(1)} gal · {v.fill_ups} fill-ups</div>
+                  </div>
+                  <div style={{fontSize:14,fontWeight:700,color:"var(--green)"}}>${Number(v.total_cost).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                </div>
+              )) : <div style={{color:"var(--gray)",fontSize:13}}>No fuel data yet</div>}
+            </div>
+            {/* By State */}
+            <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+              <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1,marginBottom:16}}>TOP FUEL STATES</div>
+              {analytics?.by_state?.length > 0 ? analytics.by_state.map(s=>(
+                <div key={s.state} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:32,height:32,borderRadius:6,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--mono)",fontSize:11,fontWeight:700}}>{s.state}</div>
+                    <div style={{fontSize:13}}>{s.state}</div>
+                  </div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#60A5FA"}}>${Number(s.spend).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                </div>
+              )) : <div style={{color:"var(--gray)",fontSize:13}}>No fuel data yet</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fuel Log Tab */}
+      {tab==="log"&&(
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid var(--border)"}}>
+                {["Date","Driver","Vehicle","State","Gallons","Price/Gal","Total","Vendor","Type"].map(h=>(
+                  <th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {fuelLog.map(f=>(
+                <tr key={f.id} style={{borderBottom:"1px solid var(--border)"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--bg3)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)",color:"var(--gray)"}}>{f.fuel_date}</td>
+                  <td style={{padding:"12px 16px",fontSize:13}}>{f.driver_name}</td>
+                  <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)",color:"var(--green)"}}>{f.vehicle}</td>
+                  <td style={{padding:"12px 16px"}}><span style={{padding:"2px 8px",background:"var(--bg3)",borderRadius:4,fontSize:11,fontFamily:"var(--mono)"}}>{f.state}</span></td>
+                  <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)"}}>{Number(f.gallons).toFixed(3)}</td>
+                  <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)"}}>${Number(f.price_per_gallon).toFixed(3)}</td>
+                  <td style={{padding:"12px 16px",fontSize:12,fontFamily:"var(--mono)",color:"var(--green)",fontWeight:600}}>${Number(f.total_cost).toFixed(2)}</td>
+                  <td style={{padding:"12px 16px",fontSize:12,color:"var(--gray)"}}>{f.vendor||"—"}</td>
+                  <td style={{padding:"12px 16px"}}><span className="tag tag-gray">{f.fuel_type}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {fuelLog.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No fuel entries yet. Click + Log Fuel to start.</div>}
+        </div>
+      )}
+
+      {/* IFTA Report Tab */}
+      {tab==="ifta"&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>QUARTER</div>
+              <select value={quarter} onChange={e=>{setQuarter(parseInt(e.target.value));}} style={{width:120}}>
+                <option value={1}>Q1 (Jan-Mar)</option>
+                <option value={2}>Q2 (Apr-Jun)</option>
+                <option value={3}>Q3 (Jul-Sep)</option>
+                <option value={4}>Q4 (Oct-Dec)</option>
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>YEAR</div>
+              <select value={year} onChange={e=>setYear(parseInt(e.target.value))} style={{width:100}}>
+                {[2024,2025,2026].map(y=><option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div style={{marginTop:18}}>
+              <button className="btn btn-green" onClick={loadIFTA} disabled={iftaLoading}>{iftaLoading?"Calculating...":"Generate Report"}</button>
+            </div>
+          </div>
+
+          {ifta&&(
+            <div>
+              {/* Summary */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+                {[
+                  {label:"Total Miles",value:ifta.total_miles?.toLocaleString(),color:"#60A5FA"},
+                  {label:"Total Gallons",value:Number(ifta.total_gallons).toFixed(3),color:"#FBBF24"},
+                  {label:"Fleet MPG",value:ifta.fleet_mpg,color:"#4ADE80"},
+                  {label:"Net Tax Due",value:`$${ifta.total_tax_due}`,color:ifta.total_tax_due>0?"#F87171":"#4ADE80"},
+                ].map(k=>(
+                  <div key={k.label} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:16,textAlign:"center"}}>
+                    <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,color:k.color}}>{k.value}</div>
+                    <div style={{fontSize:11,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:4}}>{k.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Jurisdiction Table */}
+              <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+                <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1}}>JURISDICTION BREAKDOWN — Q{ifta.quarter} {ifta.year}</div>
+                  <div style={{fontSize:11,color:ifta.total_tax_due>0?"#F87171":"#4ADE80",fontFamily:"var(--mono)",fontWeight:700}}>
+                    {ifta.total_tax_due>0?`NET DUE: $${ifta.total_tax_due}`:`NET CREDIT: $${Math.abs(ifta.total_tax_due)}`}
+                  </div>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr style={{borderBottom:"1px solid var(--border)"}}>
+                      {["State","Miles","Gal Purchased","Gal Consumed","Tax Rate","Tax Due/Credit","Status"].map(h=>(
+                        <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:10,fontFamily:"var(--mono)",color:"var(--gray)",letterSpacing:1}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ifta.jurisdictions.map(j=>(
+                      <tr key={j.state} style={{borderBottom:"1px solid var(--border)"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--bg3)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <td style={{padding:"10px 16px",fontFamily:"var(--mono)",fontSize:13,fontWeight:700}}>{j.state}</td>
+                        <td style={{padding:"10px 16px",fontSize:12,fontFamily:"var(--mono)"}}>{j.miles.toLocaleString()}</td>
+                        <td style={{padding:"10px 16px",fontSize:12,fontFamily:"var(--mono)"}}>{j.gallons_purchased}</td>
+                        <td style={{padding:"10px 16px",fontSize:12,fontFamily:"var(--mono)"}}>{j.gallons_consumed}</td>
+                        <td style={{padding:"10px 16px",fontSize:12,fontFamily:"var(--mono)"}}>${j.tax_rate}</td>
+                        <td style={{padding:"10px 16px",fontSize:12,fontFamily:"var(--mono)",color:j.tax_due>0?"#F87171":"#4ADE80",fontWeight:600}}>
+                          {j.tax_due>0?`$${j.tax_due}`:`($${Math.abs(j.tax_due)})`}
+                        </td>
+                        <td style={{padding:"10px 16px"}}>
+                          <span style={{padding:"2px 8px",borderRadius:4,fontSize:10,fontFamily:"var(--mono)",fontWeight:700,
+                            background:j.status==="DUE"?"rgba(248,113,113,0.1)":"rgba(74,222,128,0.1)",
+                            color:j.status==="DUE"?"#F87171":"#4ADE80"}}>
+                            {j.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {ifta.jurisdictions.length===0&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13}}>No data for this quarter. Log fuel and miles to generate IFTA report.</div>}
+              </div>
+            </div>
+          )}
+          {!ifta&&!iftaLoading&&<div style={{textAlign:"center",padding:"40px",color:"var(--gray)",fontSize:13,background:"var(--bg2)",borderRadius:12,border:"1px solid var(--border)"}}>Select a quarter and year then click Generate Report</div>}
+        </div>
+      )}
+
+      {/* Analytics Tab */}
+      {tab==="analytics"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+            <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1,marginBottom:16}}>COST PER VEHICLE</div>
+            {analytics?.by_vehicle?.length>0 ? analytics.by_vehicle.map(v=>{
+              const pct = totalSpend > 0 ? (v.total_cost/totalSpend)*100 : 0;
+              return (
+                <div key={v.vehicle} style={{marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{v.vehicle}</div>
+                    <div style={{fontSize:12,fontFamily:"var(--mono)",color:"var(--green)"}}>${Number(v.total_cost).toFixed(2)}</div>
+                  </div>
+                  <div style={{height:6,background:"var(--bg3)",borderRadius:3}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:"var(--green)",borderRadius:3}}/>
+                  </div>
+                  <div style={{fontSize:10,color:"var(--gray)",fontFamily:"var(--mono)",marginTop:2}}>Avg ${Number(v.avg_ppg).toFixed(3)}/gal · {v.fill_ups} fill-ups</div>
+                </div>
+              );
+            }) : <div style={{color:"var(--gray)",fontSize:13}}>No data yet</div>}
+          </div>
+          <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20}}>
+            <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1,marginBottom:16}}>SPEND BY STATE</div>
+            {analytics?.by_state?.length>0 ? analytics.by_state.map(s=>{
+              const pct = totalSpend > 0 ? (s.spend/totalSpend)*100 : 0;
+              return (
+                <div key={s.state} style={{marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{s.state}</div>
+                    <div style={{fontSize:12,fontFamily:"var(--mono)",color:"#60A5FA"}}>${Number(s.spend).toFixed(2)}</div>
+                  </div>
+                  <div style={{height:6,background:"var(--bg3)",borderRadius:3}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:"#60A5FA",borderRadius:3}}/>
+                  </div>
+                </div>
+              );
+            }) : <div style={{color:"var(--gray)",fontSize:13}}>No data yet</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── SETTINGS VIEW ──────────────────────────────────────────────────────────
 function SettingsView() {
   const [form, setForm] = useState({
@@ -2320,6 +2691,7 @@ function App() {
         {view==="inspection"&&<InspectionView drivers={drivers}/>}
         {view==="billing"&&<BillingView/>}
         {view==="settings"&&<SettingsView/>}
+        {view==="ifta"&&<FuelIFTAView drivers={drivers}/>}
         {view==="maintenance"&&<MaintenanceView/>}
         {view==="fuel"&&<FuelManagerView drivers={drivers}/>}
        {view==="more"&&<MobileMoreMenu active={view} setActive={setView}/>}
