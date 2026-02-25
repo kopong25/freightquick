@@ -783,7 +783,7 @@ async def invite_driver(data: InviteDriver):
                   (data.company_id,data.full_name,data.email,"",token))
         conn.commit()
         conn.close()
-        invite_link = f"https://freightquick-ap.onrender.com/auth.html?token={token}&email={data.email}"
+        invite_link = f"https://www.freightquik.com/auth.html?token={token}&email={data.email}"
         send_email(
             to=data.email,
             subject=f"You've been invited to join FreightQuick",
