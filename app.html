@@ -757,12 +757,6 @@ function ComplianceView({drivers}) {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState({total:0,expired:0,expiring_soon:0,compliant:0});
   const [showAdd, setShowAdd] = useState(false);
-  const [showMiles, setShowMiles] = useState(false);
-  const [milesForm, setMilesForm] = useState({
-    vehicle:"", driver_name:"", state:"TX", miles:"",
-    trip_date: new Date().toISOString().slice(0,10), load_id:""
-  });
-  const [savingMiles, setSavingMiles] = useState(false);
 
   async function saveMiles(e) {
     e.preventDefault();
@@ -1961,6 +1955,7 @@ function FuelIFTAView({drivers}) {
   const [loading, setLoading] = useState(true);
   const [iftaLoading, setIftaLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showMiles, setShowMiles] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [quarter, setQuarter] = useState(1);
