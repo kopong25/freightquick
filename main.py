@@ -498,6 +498,24 @@ async def create_assignment(assignment: Assignment):
     c.execute("""INSERT INTO routes (assignment_id,total_miles,estimated_hours,fuel_cost,toll_cost)
                  VALUES (%s,%s,%s,%s,%s)""",
               (assignment_id,route_miles,round(route_miles/55,1),round(route_miles*0.43,2),round(route_miles*0.08,2)))
+    # Auto-pull miles into IFTA from dispatch
+    c.execute("SELECT full_name FROM drivers WHERE id=%s",(assignment.driver_id,))
+    driver_row = c.fetchone()
+    driver_name = driver_row["full_name"] if driver_row else "Unknown"
+    # Get origin state from load
+    origin_state = load.get("origin","").strip()[-2:].upper() if load.get("origin") else "XX"
+    dest_state = load.get("destination","").strip()[-2:].upper() if load.get("destination") else "XX"
+    trip_date = datetime.now().strftime("%Y-%m-%d")
+    # Log origin state miles (half the trip)
+    if origin_state in [s for s in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"]]:
+        c.execute("""INSERT INTO vehicle_miles (company_id,vehicle,driver_name,state,miles,trip_date,load_id)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                  (load.get("company_id",1),f"TRK-{assignment.driver_id:03d}",driver_name,origin_state,round(route_miles*0.5,1),trip_date,load["id"]))
+    # Log destination state miles (other half)
+    if dest_state in [s for s in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"]]:
+        c.execute("""INSERT INTO vehicle_miles (company_id,vehicle,driver_name,state,miles,trip_date,load_id)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                  (load.get("company_id",1),f"TRK-{assignment.driver_id:03d}",driver_name,dest_state,round(route_miles*0.5,1),trip_date,load["id"]))
     conn.commit()
     conn.close()
     return {"id":assignment_id,"match_score":match_score,"match_type":match_type}
@@ -1232,6 +1250,44 @@ async def fuel_analytics(company_id: int = 1):
     totals = dict(c.fetchone())
     conn.close()
     return {"by_vehicle": by_vehicle, "by_state": by_state, "totals": totals}
+
+@app.get("/api/ifta/export")
+async def ifta_export(company_id: int = 1, quarter: int = 1, year: int = 2026):
+    from fastapi.responses import StreamingResponse
+    import io, csv
+    quarters = {1:("01-01","03-31"),2:("04-01","06-30"),3:("07-01","09-30"),4:("10-01","12-31")}
+    start, end = quarters[quarter]
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("""SELECT state, SUM(miles) as total_miles FROM vehicle_miles
+                 WHERE company_id=%s AND trip_date BETWEEN %s AND %s GROUP BY state""",
+              (company_id, f"{year}-{start}", f"{year}-{end}"))
+    miles_by_state = {r["state"]: float(r["total_miles"]) for r in c.fetchall()}
+    c.execute("""SELECT state, SUM(gallons) as total_gallons FROM fuel_entries
+                 WHERE company_id=%s AND fuel_date BETWEEN %s AND %s GROUP BY state""",
+              (company_id, f"{year}-{start}", f"{year}-{end}"))
+    fuel_by_state = {r["state"]: float(r["total_gallons"]) for r in c.fetchall()}
+    conn.close()
+    total_miles = sum(miles_by_state.values())
+    total_gallons = sum(fuel_by_state.values())
+    fleet_mpg = total_miles / total_gallons if total_gallons > 0 else 0
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([f"IFTA Report Q{quarter} {year}"])
+    writer.writerow([f"Total Miles: {round(total_miles,1)}", f"Total Gallons: {round(total_gallons,3)}", f"Fleet MPG: {round(fleet_mpg,2)}"])
+    writer.writerow([])
+    writer.writerow(["State","Miles","Gal Purchased","Gal Consumed","Tax Rate","Tax Due/Credit","Status"])
+    for state in sorted(set(list(miles_by_state.keys())+list(fuel_by_state.keys()))):
+        miles = miles_by_state.get(state,0)
+        gallons_purchased = fuel_by_state.get(state,0)
+        rate = IFTA_RATES.get(state,0.25)
+        gallons_consumed = round(miles/fleet_mpg,3) if fleet_mpg > 0 else 0
+        tax_due = round((gallons_consumed-gallons_purchased)*rate,2)
+        writer.writerow([state,round(miles,1),round(gallons_purchased,3),gallons_consumed,rate,tax_due,"DUE" if tax_due>0 else "CREDIT"])
+    output.seek(0)
+    return StreamingResponse(iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition":f"attachment; filename=IFTA_Q{quarter}_{year}.csv"})
 
 if __name__ == "__main__":
     import uvicorn

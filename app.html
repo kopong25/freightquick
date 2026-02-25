@@ -440,7 +440,10 @@ function LoadsView({loads,onRefresh}) {
           <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--green)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Load Management</div>
           <div style={{fontFamily:"var(--display)",fontSize:22,fontWeight:800,letterSpacing:-0.8}}>All Loads</div>
         </div>
-        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Add Load</button>
+        <div style={{display:"flex",gap:8}}>
+        <button className="btn btn-ghost" onClick={()=>setShowMiles(!showMiles)}>🛣 Log Miles</button>
+        <button className="btn btn-green" onClick={()=>setShowAdd(!showAdd)}>+ Log Fuel</button>
+      </div>
       </div>
 
       {showAdd&&(
@@ -754,6 +757,35 @@ function ComplianceView({drivers}) {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState({total:0,expired:0,expiring_soon:0,compliant:0});
   const [showAdd, setShowAdd] = useState(false);
+  const [showMiles, setShowMiles] = useState(false);
+  const [milesForm, setMilesForm] = useState({
+    vehicle:"", driver_name:"", state:"TX", miles:"",
+    trip_date: new Date().toISOString().slice(0,10), load_id:""
+  });
+  const [savingMiles, setSavingMiles] = useState(false);
+
+  async function saveMiles(e) {
+    e.preventDefault();
+    setSavingMiles(true);
+    const res = await apiFetch("/miles", {
+      method:"POST",
+      body: JSON.stringify({
+        ...milesForm,
+        company_id: fqUser?.company_id||1,
+        miles: parseFloat(milesForm.miles),
+        load_id: milesForm.load_id ? parseInt(milesForm.load_id) : null
+      })
+    });
+    setSavingMiles(false);
+    if(res?.message) {
+      setToast("✅ Miles logged!");
+      setShowMiles(false);
+      setMilesForm({vehicle:"",driver_name:"",state:"TX",miles:"",trip_date:new Date().toISOString().slice(0,10),load_id:""});
+    } else {
+      setToast("❌ Error logging miles");
+    }
+    setTimeout(()=>setToast(null),3000);
+  }
   const [form, setForm] = useState({driver_id:"",cdl_expiry:"",medical_card_expiry:"",drug_test_date:"",annual_inspection_expiry:"",notes:""});
   const [toast, setToast] = useState(null);
 
@@ -2014,6 +2046,48 @@ function FuelIFTAView({drivers}) {
         ))}
       </div>
 
+      {/* Log Miles Form */}
+      {showMiles&&(
+        <form onSubmit={saveMiles} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+          <div style={{fontFamily:"var(--display)",fontSize:15,fontWeight:700,marginBottom:16}}>🛣 Log Miles by State</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:12}}>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>DRIVER</div>
+              <select value={milesForm.driver_name} onChange={e=>setMilesForm(p=>({...p,driver_name:e.target.value}))} style={{width:"100%"}} required>
+                <option value="">Select Driver</option>
+                {drivers.map(d=><option key={d.id} value={d.full_name||d.username}>{d.full_name||d.username}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>VEHICLE</div>
+              <input value={milesForm.vehicle} onChange={e=>setMilesForm(p=>({...p,vehicle:e.target.value}))} placeholder="TRK-001" style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>STATE</div>
+              <select value={milesForm.state} onChange={e=>setMilesForm(p=>({...p,state:e.target.value}))} style={{width:"100%"}} required>
+                {US_STATES.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>MILES</div>
+              <input type="number" step="0.1" value={milesForm.miles} onChange={e=>setMilesForm(p=>({...p,miles:e.target.value}))} placeholder="0.0" style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>DATE</div>
+              <input type="date" value={milesForm.trip_date} onChange={e=>setMilesForm(p=>({...p,trip_date:e.target.value}))} style={{width:"100%"}} required/>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"var(--gray)",marginBottom:4,fontFamily:"var(--mono)"}}>LOAD # (OPTIONAL)</div>
+              <input value={milesForm.load_id} onChange={e=>setMilesForm(p=>({...p,load_id:e.target.value}))} placeholder="Load ID" style={{width:"100%"}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button type="submit" className="btn btn-green" disabled={savingMiles}>{savingMiles?"Saving...":"Save Miles"}</button>
+            <button type="button" className="btn btn-ghost" onClick={()=>setShowMiles(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
       {/* Add Fuel Form */}
       {showAdd&&(
         <form onSubmit={saveFuel} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
@@ -2174,9 +2248,10 @@ function FuelIFTAView({drivers}) {
                 {[2024,2025,2026].map(y=><option key={y} value={y}>{y}</option>)}
               </select>
             </div>
-            <div style={{marginTop:18}}>
-              <button className="btn btn-green" onClick={loadIFTA} disabled={iftaLoading}>{iftaLoading?"Calculating...":"Generate Report"}</button>
-            </div>
+            <div style={{marginTop:18,display:"flex",gap:8}}>
+                <button className="btn btn-green" onClick={loadIFTA} disabled={iftaLoading}>{iftaLoading?"Calculating...":"Generate Report"}</button>
+                {ifta&&<button className="btn btn-ghost" onClick={()=>window.open(`https://freightquick-app.onrender.com/api/ifta/export?company_id=${fqUser?.company_id||1}&quarter=${quarter}&year=${year}`)}>⬇ Export CSV</button>}
+              </div>
           </div>
 
           {ifta&&(
