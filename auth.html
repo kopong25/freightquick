@@ -149,6 +149,12 @@ async function acceptInvite() {
 const urlParams = new URLSearchParams(window.location.search);
 const inviteToken = urlParams.get("token");
 const inviteEmail = urlParams.get("email");
+const tabParam = urlParams.get("tab");
+if(tabParam === "signup") {
+  window.addEventListener("DOMContentLoaded", function() {
+    showTab("signup");
+  });
+}
 
 if(inviteToken && inviteEmail) {
   window.addEventListener("DOMContentLoaded", function() {
