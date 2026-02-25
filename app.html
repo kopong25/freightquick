@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FreightQuick — Dashboard</title>
+<title>FreightQuik — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -193,7 +193,7 @@ function Sidebar({active,setActive}) {
           <div style={{width:30,height:30,background:"linear-gradient(135deg, var(--green), #FF8B5A)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"var(--white)"}}>
             ⚡
           </div>
-          <span style={{fontFamily:"var(--display)",fontSize:15,fontWeight:900}}>FreightQuick</span>
+          <span style={{fontFamily:"var(--display)",fontSize:15,fontWeight:900}}>FreightQuik</span>
         </div>
       </div>
       <div style={{padding:"12px 10px",flex:1}}>
@@ -926,7 +926,7 @@ function TruckPayView({drivers}) {
 
     // Load company settings
     const settings = await apiFetch(`/settings/${fqUser?.company_id}`);
-    const companyName = settings?.company_name || fqUser?.company_name || "FreightQuick";
+    const companyName = settings?.company_name || fqUser?.company_name || "FreightQuik";
     const companyAddress = settings?.address ? `${settings.address}, ${settings.city||""} ${settings.state||""} ${settings.zip_code||""}` : "";
     const companyPhone = settings?.phone || "";
     const companyEmail = settings?.email || "";
@@ -2696,7 +2696,7 @@ function TopBar({view}) {
   const labels = {analytics:"Analytics Overview",dispatch:"Dispatch Management",loads:"Load Management",drivers:"Driver Management",routes:"Route Optimization"};
   return (
     <div style={{padding:"12px 24px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,background:"var(--bg)"}}>
-      <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1}}>FREIGHTQUICK / {labels[view]?.toUpperCase()}</div>
+      <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--gray)",letterSpacing:1}}>FREIGHTQUIK / {labels[view]?.toUpperCase()}</div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",background:"var(--green-glow)",border:"1px solid rgba(255,107,53,0.2)",borderRadius:6}}>
           <div style={{width:6,height:6,borderRadius:"50%",background:"var(--green)",animation:"pulse 2s infinite"}}></div>
@@ -2739,7 +2739,7 @@ function App() {
       )}
       {trialStatus?.status==="expired"&&(
         <div style={{background:"rgba(255,92,92,0.15)",borderBottom:"1px solid rgba(255,92,92,0.3)",padding:"8px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-          <div style={{fontSize:12,color:"var(--red)",fontFamily:"var(--mono)"}}>⚠ TRIAL EXPIRED — Subscribe to continue using FreightQuick</div>
+          <div style={{fontSize:12,color:"var(--red)",fontFamily:"var(--mono)"}}>⚠ TRIAL EXPIRED — Subscribe to continue using FreightQuik</div>
           <button className="btn btn-green btn-sm" onClick={()=>setView("billing")}>Subscribe Now</button>
         </div>
       )}
