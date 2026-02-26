@@ -1020,7 +1020,7 @@ async def create_checkout(data: CreateCheckout):
             line_items=[{
                 "price_data": {
                     "currency": "usd",
-                    "unit_amount": 2900,
+                    "unit_amount": 2500,
                     "recurring": {"interval": "month"},
                     "product_data": {
                         "name": "FreightQuick — Driver Subscription",
