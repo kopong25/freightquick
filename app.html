@@ -1953,6 +1953,11 @@ function FuelIFTAView({drivers}) {
   const [iftaLoading, setIftaLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showMiles, setShowMiles] = useState(false);
+  const [milesForm, setMilesForm] = useState({
+    vehicle:"", driver_name:"", state:"TX", miles:"",
+    trip_date: new Date().toISOString().slice(0,10), load_id:""
+  });
+  const [savingMiles, setSavingMiles] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [quarter, setQuarter] = useState(1);
@@ -1964,6 +1969,29 @@ function FuelIFTAView({drivers}) {
   });
 
   useEffect(()=>{ loadAll(); },[]);
+  
+  async function saveMiles(e) {
+    e.preventDefault();
+    setSavingMiles(true);
+    const res = await apiFetch("/miles", {
+      method:"POST",
+      body: JSON.stringify({
+        ...milesForm,
+        company_id: fqUser?.company_id||1,
+        miles: parseFloat(milesForm.miles),
+        load_id: milesForm.load_id ? parseInt(milesForm.load_id) : null
+      })
+    });
+    setSavingMiles(false);
+    if(res?.message) {
+      setToast("✅ Miles logged!");
+      setShowMiles(false);
+      setMilesForm({vehicle:"",driver_name:"",state:"TX",miles:"",trip_date:new Date().toISOString().slice(0,10),load_id:""});
+    } else {
+      setToast("❌ Error logging miles");
+    }
+    setTimeout(()=>setToast(null),3000);
+  }
 
   async function loadAll() {
     setLoading(true);
