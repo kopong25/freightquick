@@ -141,9 +141,10 @@ async function apiFetch(path, opts={}) {
   try {
     const companyId = fqUser?.company_id;
     const separator = path.includes("?") ? "&" : "?";
-     const fullPath = companyId && !path.includes("auth") && !path.includes("superadmin") && !path.includes("stripe")
+    const fullPath = companyId && !path.includes("auth") && !path.includes("superadmin") && !path.includes("stripe") && !path.includes("company_id")
       ? `${path}${separator}company_id=${companyId}`
       : path;
+
     const r = await fetch(API+fullPath, {headers:{"Content-Type":"application/json"},...opts});
     return await r.json();
   } catch { return null; }
