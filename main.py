@@ -253,6 +253,8 @@ def init_db():
     # Add trial columns if they don't exist
     c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP")
     c.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_subscribed INTEGER DEFAULT 0")
+    c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT")
+    c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP")
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -1288,6 +1290,69 @@ async def ifta_export(company_id: int = 1, quarter: int = 1, year: int = 2026):
     return StreamingResponse(iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition":f"attachment; filename=IFTA_Q{quarter}_{year}.csv"})
+
+class PasswordReset(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(data: PasswordReset):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT * FROM users WHERE email=%s", (data.email,))
+    user = c.fetchone()
+    if not user:
+        conn.close()
+        return {"message": "If that email exists you will receive a reset link"}
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now() + timedelta(hours=2)
+    c.execute("UPDATE users SET reset_token=%s, reset_token_expires=%s WHERE email=%s",
+              (token, expires, data.email))
+    conn.commit()
+    conn.close()
+    reset_link = f"https://www.freightquik.com/auth.html?reset_token={token}"
+    send_email(
+        to=data.email,
+        subject="Reset your FreightQuik password",
+        html=f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#E8E0D0;padding:0;border-radius:12px;overflow:hidden">
+          <div style="background:#FF6B35;padding:24px;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:24px">⚡ FreightQuik</h1>
+          </div>
+          <div style="padding:32px">
+            <h2 style="color:#F5F0E8;margin:0 0 16px">Reset Your Password</h2>
+            <p style="color:#9CA3AF;line-height:1.6">Click the button below to reset your password. This link expires in 2 hours.</p>
+            <div style="text-align:center;margin:32px 0">
+              <a href="{reset_link}" style="background:#FF6B35;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px">Reset Password →</a>
+            </div>
+            <p style="color:#6B7280;font-size:12px">If you did not request this reset please ignore this email.</p>
+          </div>
+        </div>
+        """
+    )
+    return {"message": "If that email exists you will receive a reset link"}
+
+@app.post("/api/auth/reset-password")
+async def reset_password(data: PasswordResetConfirm):
+    conn = get_db()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT * FROM users WHERE reset_token=%s", (data.token,))
+    user = c.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user = dict(user)
+    if user["reset_token_expires"] < datetime.now():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Reset link has expired")
+    c.execute("UPDATE users SET password_hash=%s, reset_token=NULL, reset_token_expires=NULL WHERE id=%s",
+              (hash_password(data.new_password), user["id"]))
+    conn.commit()
+    conn.close()
+    return {"message": "Password reset successfully"}
 
 if __name__ == "__main__":
     import uvicorn
