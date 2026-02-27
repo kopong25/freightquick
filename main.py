@@ -15,6 +15,8 @@ STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY")
 stripe.api_key = STRIPE_KEY
 import resend
 resend.api_key = os.environ.get("RESEND_API_KEY")
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 
 app = FastAPI(title="FreightQuick API", version="1.0.0")
 
@@ -926,13 +928,20 @@ async def get_all_companies():
 
 def send_email(to: str, subject: str, html: str):
     try:
-        resend.Emails.send({
-            "from": "FreightQuick <notifications@freightquick.app>",
-            "to": to,
-            "subject": subject,
-            "html": html
-        })
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = os.environ.get("BREVO_API_KEY")
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": to}],
+            sender={"name": "FreightQuik", "email": "noreply@freightquik.com"},
+            subject=subject,
+            html_content=html
+        )
+        api_instance.send_transac_email(send_smtp_email)
         return True
+    except ApiException as e:
+        print(f"Brevo email error: {e}")
+        return False
     except Exception as e:
         print(f"Email error: {e}")
         return False
