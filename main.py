@@ -1322,7 +1322,7 @@ async def forgot_password(data: PasswordReset):
               (token, expires, data.email))
     conn.commit()
     conn.close()
-    reset_link = f"https://www.freightquik.com/auth.html?reset_token={token}"
+    reset_link = f"https://freightquick-ap.onrender.com/auth.html?reset_token={token}"
     send_email(
         to=data.email,
         subject="Reset your FreightQuik password",
