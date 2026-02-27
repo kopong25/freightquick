@@ -1997,8 +1997,8 @@ function FuelIFTAView({drivers}) {
   async function loadAll() {
     setLoading(true);
     const [fuel, anal] = await Promise.all([
-      apiFetch(`/fuel?company_id=${fqUser?.company_id||1}`),
-      apiFetch(`/fuel/analytics?company_id=${fqUser?.company_id||1}`)
+      apiFetch(`/fuel`),
+      apiFetch(`/fuel/analytics`)
     ]);
     if(fuel) setFuelLog(fuel);
     if(anal) setAnalytics(anal);
@@ -2007,7 +2007,7 @@ function FuelIFTAView({drivers}) {
 
   async function loadIFTA() {
     setIftaLoading(true);
-    const data = await apiFetch(`/ifta/report?company_id=${fqUser?.company_id||1}&quarter=${quarter}&year=${year}`);
+    const data = await apiFetch(`/ifta/report?quarter=${quarter}&year=${year}`);
     if(data) setIfta(data);
     setIftaLoading(false);
   }
